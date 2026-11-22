@@ -88,10 +88,20 @@ export class Surface {
     let cut = 0;
     for (let j = j0; j <= j1; j++) { const y = wy(j); for (let i = i0; i <= i1; i++) { const q = j * GW + i; if (area[q] !== areaId) continue; const x = wx(i), u = x * px + y * py, v = x * dx + y * dy;
       if (u < u0 || u >= u1 || v < v0 || v > v1) continue;
-      if (pass === 2) { if (shade[q] & 2) continue; shade[q] = (shade[q] ^ par) | 2; } else shade[q] = par;
+      if (pass === 2) { if (shade[q] & 2) continue; shade[q] = (shade[q] ^ par) | 2; } else shade[q] = pass === 4 ? 1 : par;
       rough[q] = 0; this.dir[q] = axis; cut++; } }
     if (cut) this._mark(i0, j0, i1, j1);
     return cut;
+  }
+  /** The design pass: mow back over lane k in the opposite direction where the mask is painted, inverting the stripe there. */
+  invertLane(areaId, dir, W, k, v0, v1, mask) {
+    if (v1 < v0) { const t = v0; v0 = v1; v1 = t; }
+    const dx = dir[0], dy = dir[1], px = -dy, py = dx, u0 = k * W, u1 = u0 + W, inv = 0, { area, rough, shade } = this, axis = axisOf(dir);
+    const xs = [u0 * px + v0 * dx, u1 * px + v0 * dx, u0 * px + v1 * dx, u1 * px + v1 * dx], ys = [u0 * py + v0 * dy, u1 * py + v0 * dy, u0 * py + v1 * dy, u1 * py + v1 * dy];
+    const i0 = Math.max(0, gx(Math.min(...xs)) - 1), i1 = Math.min(GW - 1, gx(Math.max(...xs)) + 1), j0 = Math.max(0, gy(Math.max(...ys)) - 1), j1 = Math.min(GH - 1, gy(Math.min(...ys)) + 1); let cut = 0;
+    for (let j = j0; j <= j1; j++) { const y = wy(j); for (let i = i0; i <= i1; i++) { const q = j * GW + i; if (area[q] !== areaId) continue; const x = wx(i), u = x * px + y * py, v = x * dx + y * dy;
+      if (u < u0 || u >= u1 || v < v0 || v > v1 || !mask(x, y)) continue; shade[q] = inv; rough[q] = 0; this.dir[q] = axis; cut++; } }
+    if (cut) this._mark(i0, j0, i1, j1); return cut;
   }
   /** Cut part of an arc lane: texels at distance [kW, (k+1)W) from home plate between angles a0 and a1 (radians from the centre-field line). */
   cutArc(areaId, W, k, a0, a1) {

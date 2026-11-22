@@ -2,11 +2,11 @@
 // two teams take the field you prepared and play a few scripted moments. Not a baseball engine: a vignette.
 
 import { FIELDERS, DUGOUT, FIRST, SECOND, THIRD, HOME, MOUND, dist } from './geometry.js';
-import { PAY, SEASON_GAMES } from './config.js';
+import { PAY, SEASON_GAMES, BLIMP } from './config.js';
 import { mulberry } from './rng.js';
 
 const BASES = [HOME, FIRST, SECOND, THIRD];
-const cardLabel = (c) => ({ pattern: 'Special request', rain: 'Dry infield', kids: "Kids' Day lines", fireworks: 'Fireworks Night crowd', rivalry: 'Rivalry crowd' }[c.event] || 'Tonight');
+const cardLabel = (c) => ({ art: 'Drawn for the blimp', pattern: 'Special request', rain: 'Dry infield', kids: "Kids' Day lines", fireworks: 'Fireworks Night crowd', rivalry: 'Rivalry crowd' }[c.event] || 'Tonight');
 const PLAYS = ['single', 'fly', 'homer', 'grounder', 'strikeout', 'double'];
 
 export class GameDay {
@@ -21,7 +21,7 @@ export class GameDay {
     if (this.rng() < 0.45 && !this.plays.includes('homer')) this.plays[2] = 'homer';
     let on = 0, runs = 0; for (const p of this.plays) { if (p === 'single') { if (on >= 3) { runs++; on--; } on++; } else if (p === 'double') { runs += Math.max(0, on - 1); on = Math.min(on, 1) + 1; } else if (p === 'homer') { runs += on + 1; on = 0; } }
     // a well-kept park is worth something: the Clovers play better at home on a field they are proud of
-    this.field = sim.refresh().field; this.card = sim.card; this.met = sim.cardMet(); this.fireworks = this.card.event === 'fireworks'; this.sparks = 0;
+    this.field = sim.refresh().field; this.card = sim.card; this.met = sim.cardMet(); this.fireworks = this.card.event === 'fireworks'; this.sparks = 0; this.stars = sim.blimpStars(); this.look = sim.outfieldLook(); this.blimp = 0;
     const win = this.rng() < 0.3 + 0.45 * this.field; let home = runs + Math.floor(this.rng() * 3), away = Math.floor(this.rng() * 4);
     if (win && home <= away) home = away + 1 + Math.floor(this.rng() * 2); if (!win && away <= home) away = home + 1 + Math.floor(this.rng() * 2);
     this.final = { home, away };
@@ -49,7 +49,8 @@ export class GameDay {
         if (this.pt > 0.8 && (clear || this.pt > 14)) { this.go('dusk'); sim.light = 'golden'; this.crowdTarget = 0.5; this.say('Gates are open.', 3); }
         break; }
       case 'dusk': if (this.pt > 4.5) { this.go('lights'); sim.light = 'night'; for (let i = 0; i < 4; i++) this.at(0.3 + i * 0.55, () => { this.lights = (i + 1) / 4; sim.emit('tower', { i }); if (i === 3) { this.board.on = true; this.cheer = 1; this.crowdTarget = 0.9; this.crowd = Math.max(this.crowd, 0.62); this.say('Lights on at Cloverfield Park.', 3.2); sim.emit('organ', {}); } }); } break;
-      case 'lights': if (this.pt > 5.4) { this.go('players'); this.takeField(); } break;
+      case 'lights': if (this.pt > 5.4) { this.go('blimp'); sim.emit('blimp', { stars: this.stars, look: this.look }); } break;
+      case 'blimp': this.blimp = Math.min(1, this.pt / 0.6); if (this.pt > 2.2 && !this.oohed) { this.oohed = true; this.cheer = 0.35 + this.stars * 0.22; sim.emit('ooh', { stars: this.stars }); } if (this.pt > 6.2) { this.blimp = 0; this.go('players'); this.takeField(); } break;
       case 'players': if (this.pt > 5.2) { this.go('plays'); this.nextPlay(); } break;
       case 'plays': break;
       case 'final': if (this.pt > 3.4) { if (this.fireworks) { this.go('fireworks'); this.say('Fireworks!', 3); } else this.finish(); } break;
@@ -104,11 +105,12 @@ export class GameDay {
     const rows = [{ label: 'Jobs done today', v: sim.earned }, { label: 'Gate', v: PAY.gate }];
     if (card.event === 'scout' && this.met) { craft *= 2; rows.push({ label: `Craftsmanship × 2 · the scout noticed`, v: craft }); } else rows.push({ label: `Craftsmanship · field ${Math.round(this.field * 100)}%`, v: craft });
     if (card.event && card.event !== 'scout') rows.push({ label: this.met ? cardLabel(card) : `${cardLabel(card)} · missed`, v: this.met ? card.bonus : 0 });
+    rows.push({ label: `From the blimp · ${'★'.repeat(this.stars)}${'☆'.repeat(3 - this.stars)}`, v: BLIMP[this.stars] });
     const charm = sim.charm(); if (charm) rows.push({ label: 'Park charm', v: charm });
     const total = rows.reduce((n, r) => n + r.v, 0), paid = total - sim.earned; sim.bucks += paid;
     const seasonOver = card.game === SEASON_GAMES, table = sim.standingsAfter(), place = table.findIndex((t) => t.us) + 1, pennant = seasonOver && place === 1;
     if (pennant) sim.banners.push(card.season);
-    sim.summary = { day: sim.day, season: card.season, game: card.game, opp: card.opp, home: this.final.home, away: this.final.away, win, field: this.field, rows, total, bucks: sim.bucks, record: { ...sim.season }, place, table: table.slice(0, 6), seasonOver, pennant, next: sim.nextCard() };
+    sim.summary = { day: sim.day, season: card.season, game: card.game, opp: card.opp, home: this.final.home, away: this.final.away, win, field: this.field, rows, total, bucks: sim.bucks, record: { ...sim.season }, place, table: table.slice(0, 6), seasonOver, pennant, next: sim.nextCard(), stars: this.stars, look: this.look, by: sim.mowedDesign ? sim.mowedDesign.by : sim.outfieldBy, designed: !!sim.mowedDesign };
     sim.mode = 'summary'; this.phase = 'over'; this.caption = ''; sim.emit('summary', sim.summary);
   }
   skip() { this.finish(); }

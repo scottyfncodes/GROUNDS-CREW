@@ -4,6 +4,7 @@
 import { FEEL, PAY, UPGRADES, PATTERNS, SEASON_GAMES, CHARM } from './config.js';
 import { tonight, cardMet, seasonOf, league } from './season.js';
 import { mulberry } from './rng.js';
+import { emptyDesign, maskOf, countCells, packDesign, unpackDesign } from './design.js';
 import { AREAS, NAV, region, RG, dist } from './geometry.js';
 import { mowRoute, dragRoute, rakeRoute, chalkRoute, routeLength } from './routes.js';
 import { GameDay } from './gameday.js';
@@ -46,6 +47,7 @@ export class Sim {
     this.jobs = {}; this.equip = { rider: null, push: null, mat: null, rake: null, chalker: null };
     this.paid = {}; this.earned = 0; this.doneToday = 0; this.stripes = 0; this.firstStripe = false; this.light = 'morning';
     this.workers = []; this.gameday = null; this.summary = null; this.gather = null; this.record = { w: 0, l: 0 };
+    this.design = emptyDesign(); this.designName = 'Your design'; this.designV = 0; this.mowedDesign = null; this.designsMowed = 0; this.outfieldBy = null;
     this.season = { w: 0, l: 0 }; this.banners = []; this.patternDone = {}; this.wet = 0; this.sayT = 6; this.card = tonight(this.seed, this.day);
     this.rng = mulberry(this.seed); this._statT = 0; this.cond = null;
     this._crew();
@@ -62,12 +64,19 @@ export class Sim {
   refresh() { this.cond = this.surface.stats(); return this.cond; }
   worker(id) { return this.workers.find((w) => w.id === id); }
   freeWorker(near) { const free = this.workers.filter((w) => w.state === ST.IDLE); if (!free.length) return null; return near ? free.sort((a, b) => dist([a.x, a.y], near) - dist([b.x, b.y], near))[0] : free[0]; }
-  patternsOwned(area) { return PATTERNS.filter((p) => (!p.needs || this.upgrades[p.needs]) && (!p.only || !area || p.only === area)); }
+  /** Drawing your own design opens after the first game. */
+  designsOpen() { return this.day > 1 || this.record.w + this.record.l > 0; }
+  patternsOwned(area) { return PATTERNS.filter((p) => (p.needs === 'designs' ? this.designsOpen() : !p.needs || this.upgrades[p.needs]) && (!p.only || !area || p.only === area)); }
+  setDesign(cells, name) { this.design = cells; this.designName = name || 'Your design'; this.designV = (this.designV || 0) + 1; }
   cardMet() { return this.card.event ? cardMet(this.card, this.cond || this.refresh(), this.patternDone) : false; }
   charm() { let c = 0; for (const k in CHARM) if (this.upgrades[k]) c += CHARM[k]; return c; }
   standings() { return league(this.seed, this.card.season, this.card.game - (this.mode === 'summary' ? 0 : 1), this.season); }
   standingsAfter() { return league(this.seed, this.card.season, this.card.game, this.season); }
   nextCard() { return tonight(this.seed, this.day + 1); }
+  /** How the field looks from the blimp: one to three stars. Three needs a design on a near-perfect field. */
+  blimpStars() { const c = this.cond || this.refresh(), d = this.mowedDesign; if (c.field >= 0.95 && d && d.cells >= 20) return 3; if (c.field >= 0.85 || (d && c.field >= 0.7)) return 2; return 1; }
+  /** The name of what is in the outfield tonight. */
+  outfieldLook() { if (this.mowedDesign) return this.mowedDesign.name; const p = this.patternDone.outfield; return p ? PATTERNS.find((x) => x.id === p).name : (this.cond && this.cond.areas.outfield > 0.9 ? 'Fresh stripes' : 'A shaggy outfield'); }
   /** A groundskeeper says something, now and then. */
   say(w, text, secs = 3.4) { if (!w || (this.sayT > 0 && !text.force)) return; w.say = { text, t: secs }; this.sayT = 14; }
   chatter(w, kind) { const pool = LINES[w.id]; if (pool && this.rng() < (kind === 'force' ? 1 : 0.45)) this.say(w, pool[Math.floor(this.rng() * pool.length)]); }
@@ -104,8 +113,10 @@ export class Sim {
     const def = JOBS[key], w = workerId ? this.worker(workerId) : this.freeWorker(NAV.door);
     if (def.patterned) { const owned = this.patternsOwned(def.area).map((p) => p.id); pattern = owned.includes(pattern) ? pattern : this.patterns[def.area] || 'classic'; this.patterns[def.area] = pattern; }
     const W = def.equip === 'rider' ? FEEL.RIDER_WIDTH : FEEL.PUSH_WIDTH;
-    const plan = def.type === 'mow' ? mowRoute(def.area, pattern, W) : def.type === 'drag' ? dragRoute() : def.type === 'rake' ? rakeRoute() : chalkRoute();
-    const job = { key, type: def.type, area: def.area, areaId: AREAS[def.area].id, pattern, worker: w, segs: plan.segs, parityAt: plan.parityAt, si: 0, sd: 0, pass: 1, total: routeLength(plan.segs), done: 0, age: 0 };
+    if (pattern === 'design' && !countCells(this.design)) return { ok: false, reason: 'Draw something first' };
+    const designMask = pattern === 'design' ? maskOf(this.design.slice()) : null;
+    const plan = def.type === 'mow' ? mowRoute(def.area, pattern, W, NAV.gateIn, designMask) : def.type === 'drag' ? dragRoute() : def.type === 'rake' ? rakeRoute() : chalkRoute();
+    const job = { key, type: def.type, area: def.area, areaId: AREAS[def.area].id, pattern, mask: designMask, designName: pattern === 'design' ? this.designName : null, designCells: pattern === 'design' ? countCells(this.design) : 0, worker: w, segs: plan.segs, parityAt: plan.parityAt, si: 0, sd: 0, pass: 1, total: routeLength(plan.segs), done: 0, age: 0 };
     this.jobs[key] = job; this.equip[def.equip] = w.id; w.job = job; w.state = ST.ASSIGNED; w.timer = FEEL.ASSIGN_HOP; w.hop = 1; w.pose = 'stand'; w.path = null;
     // onboarding: 0 mow something, 1 watch the first stripe, 2 send a second job, 3 open the gates when happy, 4 done
     if (this.tutorial === 0 && def.type === 'mow') this.tutorial = 1; else if (this.tutorial === 1 || this.tutorial === 2) this.tutorial = 3;
@@ -138,7 +149,7 @@ export class Sim {
   nextDay() {
     if (this.mode !== 'summary') return false;
     if (this.summary && this.summary.seasonOver) this.season = { w: 0, l: 0 };
-    this.day++; this.card = tonight(this.seed, this.day); this.surface.wear(this.seed, this.day, this.card.event === 'rain'); this.wet = this.card.event === 'rain' ? 1 : 0; this.patternDone = {}; this.paid = {}; this.earned = 0; this.doneToday = 0; this.stripes = 0; this.firstStripe = false; this.gameday = null; this.summary = null; this.light = 'morning'; this.mode = 'day';
+    this.day++; this.card = tonight(this.seed, this.day); this.surface.wear(this.seed, this.day, this.card.event === 'rain'); this.wet = this.card.event === 'rain' ? 1 : 0; this.patternDone = {}; this.mowedDesign = null; this.paid = {}; this.earned = 0; this.doneToday = 0; this.stripes = 0; this.firstStripe = false; this.gameday = null; this.summary = null; this.light = 'morning'; this.mode = 'day';
     this.workers.forEach((w) => { w.x = w.px = w.home[0]; w.y = w.py = w.home[1]; w.path = null; w.state = ST.IDLE; w.pose = 'stand'; w.moving = false; w.idleT = 1 + this.rng() * 4; });
     this.refresh(); this.emit('newday'); this.sayT = 0;
     const talker = this.workers[this.day % this.workers.length], ev = this.card.event;
@@ -209,12 +220,13 @@ export class Sim {
   _work(w, job, dt) {
     const sp = this._speeds(w), S = this.surface; let budget = dt; w.workT += dt; job.age += dt;
     while (budget > 1e-6 && job.si < job.segs.length) {
-      const seg = job.segs[job.si], len = dist(seg.a, seg.b), speed = seg.work ? sp.work : sp.link, room = len - job.sd, go = Math.min(room, speed * budget);
+      const seg = job.segs[job.si], len = dist(seg.a, seg.b), speed = seg.work ? sp.work : seg.fast ? sp.work * 1.6 : sp.link, room = len - job.sd, go = Math.min(room, speed * budget);
       const ux = len ? (seg.b[0] - seg.a[0]) / len : 0, uy = len ? (seg.b[1] - seg.a[1]) / len : 0, d0 = job.sd, d1 = job.sd + go;
       if (seg.work && seg.pass === 2 && job.pass === 1) { job.pass = 2; S.beginSecondPass(job.areaId); }
       w.x = seg.a[0] + ux * d1; w.y = seg.a[1] + uy * d1; if (len) { w.heading = [ux, uy]; if (Math.abs(ux) > 0.15) w.face = ux > 0 ? 1 : -1; }
       if (seg.work) {
         if (job.type === 'mow' && seg.arc) { const x0 = seg.a[0] + ux * (d0 - 0.8), y0 = seg.a[1] + uy * (d0 - 0.8), x1 = seg.a[0] + ux * (d1 + 0.8), y1 = seg.a[1] + uy * (d1 + 0.8); S.cutArc(job.areaId, seg.W, seg.arc.k, Math.atan2(x0, y0), Math.atan2(x1, y1)); }
+        else if (job.type === 'mow' && seg.pass === 3) { const va = seg.a[0] * seg.dir[0] + seg.a[1] * seg.dir[1], sgn = (ux * seg.dir[0] + uy * seg.dir[1]) >= 0 ? 1 : -1; S.invertLane(job.areaId, seg.dir, seg.W, seg.k, va + sgn * (d0 - 0.6), va + sgn * (d1 + 0.6), job.mask); }
         else if (job.type === 'mow') { const va = seg.a[0] * seg.dir[0] + seg.a[1] * seg.dir[1], sgn = (ux * seg.dir[0] + uy * seg.dir[1]) >= 0 ? 1 : -1; S.cutLane(job.areaId, seg.dir, seg.W, seg.k, va + sgn * (d0 - 0.6), va + sgn * (d1 + 0.6), seg.pass); }
         else if (job.type === 'drag') S.groom(job.areaId, w.x - ux * 3.5, w.y - uy * 3.5, this.upgrades.mat ? FEEL.MAT_PRO_RADIUS : FEEL.MAT_RADIUS);
         else if (job.type === 'rake') S.groom(job.areaId, w.x, w.y, 6.8);
@@ -237,7 +249,7 @@ export class Sim {
     delete this.jobs[job.key]; w.job = null; this.doneToday++;
     const pay = this.paid[job.key] ? 0 : PAY[job.key]; this.paid[job.key] = true; this.bucks += pay; this.earned += pay;
     w.state = ST.RETURNING; w.path = this._pathTo(w, NAV.park[w.equip]); w.pi = 0; w.cheer = 1.6;
-    this.refresh(); if (job.type === 'mow' && job.pattern && this.cond.areas[job.area] >= 0.97) this.patternDone[job.area] = job.pattern; if (job.area === 'skin') this.wet = 0;
+    this.refresh(); if (job.type === 'mow' && job.pattern && this.cond.areas[job.area] >= 0.97) { this.patternDone[job.area] = job.pattern; if (job.area === 'outfield') { this.mowedDesign = job.pattern === 'design' ? { name: job.designName, cells: job.designCells, by: w.name } : null; this.outfieldBy = w.name; if (job.pattern === 'design') this.designsMowed = (this.designsMowed || 0) + 1; } } if (job.area === 'skin') this.wet = 0;
     this.emit('jobdone', { worker: w, job, pay }); this.chatter(w);
   }
 
@@ -255,7 +267,7 @@ export class Sim {
 
   // ---- persistence -------------------------------------------------------------------------------------
 
-  toSave() { return { day: this.day, bucks: this.bucks, seed: this.seed, upgrades: this.upgrades, patterns: this.patterns, tutorial: this.tutorial, paid: this.paid, earned: this.earned, doneToday: this.doneToday, light: this.light === 'afternoon' ? 'afternoon' : 'morning', record: this.record, season: this.season, banners: this.banners, patternDone: this.patternDone, wet: this.wet, field: this.surface.serialize() }; }
+  toSave() { return { day: this.day, bucks: this.bucks, seed: this.seed, upgrades: this.upgrades, patterns: this.patterns, tutorial: this.tutorial, paid: this.paid, earned: this.earned, doneToday: this.doneToday, light: this.light === 'afternoon' ? 'afternoon' : 'morning', record: this.record, season: this.season, banners: this.banners, patternDone: this.patternDone, wet: this.wet, design: packDesign(this.design), designName: this.designName, mowedDesign: this.mowedDesign, designsMowed: this.designsMowed, field: this.surface.serialize() }; }
   fromSave(s) {
     const num = (v, lo, hi, d) => (Number.isFinite(v) && v >= lo && v <= hi ? v : d);
     this.day = Math.floor(num(s.day, 1, 1e6, 1)); this.bucks = Math.floor(num(s.bucks, 0, 1e9, 0)); this.seed = Math.floor(num(s.seed, 0, 2 ** 31, 1948));
@@ -268,6 +280,9 @@ export class Sim {
     this.banners = Array.isArray(s.banners) ? s.banners.filter((b) => Number.isInteger(b) && b > 0 && b < 1000).slice(0, 12) : [];
     this.patternDone = {}; if (s.patternDone && PATTERNS.some((p) => p.id === s.patternDone.outfield)) this.patternDone.outfield = s.patternDone.outfield;
     this.wet = num(s.wet, 0, 1, 0); this.card = tonight(this.seed, this.day);
+    this.designsMowed = Math.floor(num(s.designsMowed, 0, 1e6, 0));
+    this.design = unpackDesign(s.design); this.designName = typeof s.designName === 'string' ? s.designName.slice(0, 24) : 'Your design';
+    this.mowedDesign = s.mowedDesign && typeof s.mowedDesign.name === 'string' && Number.isFinite(s.mowedDesign.cells) ? { name: s.mowedDesign.name.slice(0, 24), cells: Math.max(0, Math.min(999, Math.floor(s.mowedDesign.cells))), by: typeof s.mowedDesign.by === 'string' ? s.mowedDesign.by.slice(0, 12) : null } : null;
     this.surface.deserialize(s.field); this.rng = mulberry(this.seed + this.day * 7919); this._crew(); this.refresh();
   }
 }

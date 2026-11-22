@@ -118,6 +118,8 @@ export class Sound {
       case 'firework': this.burst(300 + Math.random() * 200, 0.6, 0.18, 0, 0.7); this.burst(2400, 0.4, 0.05, 0.05, 0.5); break;
       case 'summary': this.tone(NOTE(74), 0.5, 0.04, 'triangle'); break;
       case 'newday': this.stinger('morning', 0.03); break;
+      case 'blimp': this.stinger('walkup', 0.035); break;
+      case 'ooh': this.play('cheer', 0.3 + d.stars * 0.17, 0.74); if (d.stars === 3) this.clap(24, 0.03); break;
     }
   }
 

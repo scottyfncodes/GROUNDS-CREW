@@ -78,14 +78,14 @@ test('skipping the game pays the same', () => {
 import { tonight, seasonOf } from '../src/season.js';
 import { SEASON_GAMES } from '../src/config.js';
 
-test('the schedule is fixed by the seed; day 1 is plain, day 2 is a pattern request', () => {
-  assert.equal(tonight(1948, 1).event, null); assert.equal(tonight(1948, 2).event, 'pattern'); assert.ok(tonight(1948, 2).pattern);
+test('the schedule is fixed by the seed; day 1 is plain, day 2 asks for a design, day 3 a pattern', () => {
+  assert.equal(tonight(1948, 1).event, null); assert.equal(tonight(1948, 2).event, 'art'); assert.equal(tonight(1948, 3).event, 'pattern'); assert.ok(tonight(1948, 3).pattern);
   assert.deepEqual(tonight(1948, 7), tonight(1948, 7)); assert.equal(tonight(1948, SEASON_GAMES).event, 'fireworks'); assert.deepEqual(seasonOf(SEASON_GAMES + 1), { n: 2, game: 1 });
 });
 
 test('a pattern request pays only when the outfield is finished in that pattern', () => {
   for (const right of [true, false]) {
-    const { sim, surface } = fresh(); sim.day = 2; sim.card = tonight(sim.seed, 2); const want = sim.card.pattern, other = ['classic', 'diagonal', 'checker'].find((p) => p !== want);
+    const { sim, surface } = fresh(); sim.day = 3; sim.card = tonight(sim.seed, 3); const want = sim.card.pattern, other = ['classic', 'diagonal', 'checker'].find((p) => p !== want);
     sim.assign('gus', 'mow:outfield', right ? want : other); until(sim, () => !sim.jobs['mow:outfield']); assert.equal(sim.patternDone.outfield, right ? want : other);
     sim.openGates(); sim.gameday.skip(); const row = sim.summary.rows.find((r) => r.label.startsWith('Special request')); assert.equal(row.v, right ? 40 : 0);
   }
@@ -98,4 +98,27 @@ test('a better field wins more often, and a season ends in the standings', () =>
   const { sim, surface } = fresh(); for (let g = 1; g <= SEASON_GAMES; g++) { surface.finishAll(); sim.openGates(); sim.gameday.skip(); if (g < SEASON_GAMES) sim.nextDay(); }
   assert.equal(sim.summary.seasonOver, true); assert.equal(sim.summary.record.w + sim.summary.record.l, SEASON_GAMES); assert.ok(sim.summary.place >= 1 && sim.summary.place <= 6);
   assert.equal(sim.banners.length, sim.summary.pennant ? 1 : 0); sim.nextDay(); assert.deepEqual(sim.season, { w: 0, l: 0 }); assert.equal(sim.card.season, 2);
+});
+
+import { stamp, maskOf, countCells, packDesign, unpackDesign, PAINTABLE } from '../src/design.js';
+import { AREAS as AR } from '../src/geometry.js';
+import { wx, wy } from '../src/surface.js';
+
+test('a design is mown in: dark under the drawing, light everywhere else; the blimp gives it three stars', () => {
+  const { sim, surface } = fresh(); sim.day = 2; sim.card = tonight(sim.seed, 2); assert.equal(sim.card.event, 'art');
+  assert.equal(sim.assign('gus', 'mow:outfield', 'design').ok, false, 'nothing drawn yet');
+  const d = stamp('clover'); assert.ok(countCells(d) > 40); sim.setDesign(d, 'Clover'); assert.ok(sim.assign('gus', 'mow:outfield', 'design').ok);
+  const t = until(sim, () => !sim.jobs['mow:outfield'], 400); assert.ok(t < 240, `took ${t}s`);
+  const m = maskOf(d); let ok = 0, bad = 0; const W = surface.area.length / 1040;
+  for (let q = 0; q < surface.area.length; q += 37) if (surface.area[q] === AR.outfield.id) { const i = q % 1240, j = (q / 1240) | 0, want = m(wx(i), wy(j)) ? 0 : 1; (surface.shade[q] & 1) === want ? ok++ : bad++; }
+  assert.ok(bad / (ok + bad) < 0.03, `${bad} of ${ok + bad} texels wrong`);
+  assert.deepEqual(sim.mowedDesign, { name: 'Clover', cells: countCells(d), by: 'Gus' });
+  surface.finishAll(); sim.refresh(); sim.patternDone.outfield = 'design'; assert.equal(sim.blimpStars(), 3); assert.equal(sim.cardMet(), true);
+  sim.openGates(); sim.gameday.skip(); assert.ok(sim.summary.rows.some((r) => r.label.startsWith('From the blimp') && r.v === 30)); assert.equal(sim.summary.designed, true);
+  assert.deepEqual(Array.from(unpackDesign(packDesign(d))), Array.from(d));
+});
+
+test('stripes alone top out at two stars; a design is only paintable on outfield grass', () => {
+  const { sim, surface } = fresh(); surface.finishAll(); sim.refresh(); assert.equal(sim.blimpStars(), 2);
+  assert.ok(PAINTABLE.some((v) => v === 0) && PAINTABLE.some((v) => v === 1));
 });

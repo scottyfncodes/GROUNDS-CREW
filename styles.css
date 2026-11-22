@@ -49,7 +49,7 @@ canvas#game:focus-visible { outline: 4px solid var(--brass); outline-offset: -4p
 .tab[aria-expanded="true"] { background: var(--navy); color: var(--cream); }
 .tab--speed { min-width: 48px; font-variant-numeric: tabular-nums; }
 .enamel--bar { height: var(--bar-h); min-height: 0; font-size: var(--t-s); padding: 0 var(--s2); flex: 1 1 0; min-width: 0; max-width: 220px; white-space: nowrap; }
-.enamel--skip { position: fixed; right: calc(var(--sar) + var(--s3)); bottom: calc(var(--sab) + var(--s3)); font-size: var(--t-m); }
+.enamel--skip { z-index: 4; position: fixed; right: calc(var(--sar) + var(--s3)); bottom: calc(var(--sab) + var(--s3)); font-size: var(--t-m); }
 
 /* title */
 .title { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: calc(var(--sat) + var(--s6)) var(--s4) calc(var(--sab) + var(--s3)); pointer-events: none; transition: opacity .5s; }
@@ -81,6 +81,25 @@ canvas#game:focus-visible { outline: 4px solid var(--brass); outline-offset: -4p
 .next { font-size: var(--t-s); font-weight: 400; color: var(--muted); margin-bottom: var(--s3); }
 .pennant { font: 400 var(--t-l)/1.1 var(--display); color: var(--brick); margin: var(--s1) 0; }
 
+/* the drawing pad */
+.sheet[data-kind="design"] { max-height: min(66vh, 560px); }
+.pad { display: block; width: 100%; height: auto; border: 2px solid var(--navy); border-radius: 8px; background: #e7dcc3; touch-action: none; cursor: crosshair; margin: var(--s1) 0 var(--s2); }
+.opts .opt[data-act="tool"][aria-pressed="true"] { background: var(--brass); color: var(--navy); }
+
+/* the blimp's broadcast shot */
+.broadcast { position: fixed; inset: 0; pointer-events: none; z-index: 3; }
+.broadcast .lb { position: absolute; left: 0; right: 0; height: 9vh; background: #10151f; animation: lb .5s ease-out both; }
+.lb--top { top: 0; } .lb--bot { bottom: 0; }
+@keyframes lb { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.lb--top { transform-origin: top; } .lb--bot { transform-origin: bottom; }
+.third { position: absolute; left: var(--s4); bottom: calc(9vh + var(--s3)); background: var(--navy); color: var(--cream); border-radius: 6px; box-shadow: inset 0 0 0 2px var(--brass); padding: var(--s2) var(--s4) var(--s2); animation: third .5s .5s ease-out both; max-width: calc(100% - 2 * var(--s4)); }
+@keyframes third { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: none; } }
+.third small { display: flex; align-items: center; gap: 6px; font-size: var(--t-xs); letter-spacing: .16em; color: #f0d79a; }
+.third .rec { width: 8px; height: 8px; border-radius: 50%; background: #e0574a; animation: rec 1s steps(2) infinite; } @keyframes rec { 50% { opacity: .2; } }
+.third b { display: block; font: 400 var(--t-xl)/1.05 var(--display); margin: 2px 0; }
+.third span { font-size: 26px; color: var(--brass); letter-spacing: 2px; }
+.summary .actions { margin-top: 0; } .summary .actions .enamel { width: auto; flex: 1; }
+
 /* prompts and captions */
 .prompt { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--sab) + var(--bar-h) + var(--s6)); width: max-content; max-width: calc(100% - 2 * var(--s4)); font-size: var(--t-m); pointer-events: none; animation: rise .16s ease-out; }
 .caption { position: fixed; left: 50%; transform: translateX(-50%); top: calc(var(--sat) + 64px); width: max-content; max-width: calc(100% - 2 * var(--s4)); background: var(--navy); color: var(--cream); border-radius: var(--radius); box-shadow: 0 3px 0 var(--navy-deep), inset 0 0 0 2px var(--brass); padding: var(--s2) var(--s4); font: 400 var(--t-m)/1.2 var(--display); text-align: center; animation: rise .16s ease-out; }
@@ -104,6 +123,7 @@ canvas#game:focus-visible { outline: 4px solid var(--brass); outline-offset: -4p
 .swatch--classic { background: repeating-linear-gradient(90deg, #86b85c 0 5px, #629c49 5px 10px); }
 .swatch--diagonal { background: repeating-linear-gradient(45deg, #86b85c 0 4px, #629c49 4px 8px); }
 .swatch--checker { background: conic-gradient(#86b85c 25%, #629c49 0 50%, #86b85c 0 75%, #629c49 0) 0 0/10px 10px; }
+.swatch--design { background: #9fcb6c; box-shadow: inset 6px 6px 0 -2px #4b8a3e; }
 .swatch--diamonds { background: conic-gradient(from 45deg, #86b85c 25%, #629c49 0 50%, #86b85c 0 75%, #629c49 0) 0 0/10px 10px; }
 .sheet .enamel { width: 100%; }
 .actions { display: flex; gap: var(--s2); margin-top: var(--s3); } .actions > * { flex: 1; padding: 0 var(--s3); font-size: var(--t-m); }
