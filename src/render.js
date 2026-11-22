@@ -21,7 +21,7 @@ export class Renderer {
     this.cv = canvas; this.g = canvas.getContext('2d'); this.sim = sim; this.surface = surface;
     this.cam = { x: 0, y: 190, s: 0.74 }; this.to = { ...this.cam }; this.home = { ...this.cam }; this.insets = { top: 60, bottom: 100 }; this.follow = null; this.userMoved = false;
     this.L = { morning: 1, afternoon: 0, golden: 0, night: 0 }; this.lamps = 0;
-    this.parts = []; this.sparks = []; this.floats = []; this.routeFx = null; this.hint = null; this.preview = null; this.selected = null; this.overlays = {};
+    this.parts = []; this.sparks = []; this.sheens = []; this.flash = 0; this.floats = []; this.routeFx = null; this.hint = null; this.preview = null; this.selected = null; this.overlays = {};
     this.dpr = 1; this.slow = 0; this.t = 0; this.reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
     this._scenery(); this.resize();
   }
@@ -92,10 +92,11 @@ export class Renderer {
 
   puff(x, y, z, color, n, spread, up, life) { if (this.parts.length > 140) return; for (let i = 0; i < n; i++) this.parts.push({ x: x + (Math.random() - 0.5) * spread, y: y + (Math.random() - 0.5) * spread, z, vx: (Math.random() - 0.5) * 9, vy: (Math.random() - 0.5) * 9, vz: up * (0.5 + Math.random()), life: life * (0.6 + Math.random() * 0.6), max: life, c: color, s: 1 }); }
   on(type, d) {
-    if (type === 'stripe') { if (this.sparks.length > 3) this.sparks.shift(); this.sparks.push({ a: d.seg.b, b: d.seg.a, t: 0, chalk: d.job.type === 'chalk' }); }
+    if (type === 'stripe') { if (d.job.type === 'mow') { if (this.sheens.length > 2) this.sheens.shift(); this.sheens.push({ seg: d.seg, t: 0, first: d.first }); if (d.first) this.floats.push({ x: (d.seg.a[0] + d.seg.b[0]) / 2, y: (d.seg.a[1] + d.seg.b[1]) / 2, z: 10, t: 0, text: 'First stripe!', big: true }); } if (this.sparks.length > 3) this.sparks.shift(); this.sparks.push({ a: d.seg.b, b: d.seg.a, t: 0, chalk: d.job.type === 'chalk' }); }
     else if (type === 'jobdone') { if (d.pay) this.floats.push({ x: d.worker.x, y: d.worker.y, z: 34, t: 0, text: `+${d.pay}` }); this.puff(d.worker.x, d.worker.y, 22, PAL.brassYellow, 10, 14, 16, 1.1); }
+    else if (type === 'workstart') this.routeFx = null;
     else if (type === 'assign') this.routeFx = { segs: d.job.segs.filter((s) => s.work), t: 0 };
-    else if (type === 'tower') this.puff(TOWERS[d.i][0], TOWERS[d.i][1], 82, '#fff3c4', 8, 14, 6, 0.7);
+    else if (type === 'tower') { if (d.i === 3) this.flash = 1; this.puff(TOWERS[d.i][0], TOWERS[d.i][1], 82, '#fff3c4', 8, 14, 6, 0.7); }
     else if (type === 'score' || type === 'roar') for (let i = 0; i < 16; i++) { const f = this.fans[Math.floor(Math.random() * this.fans.length)]; this.puff(f.x, f.y, f.z + 8, FAN_COLORS[i % 6], 1, 2, 22, 1.2); }
   }
   overlay(key, build) { if (!this.overlays[key]) { const c = document.createElement('canvas'); c.width = GW >> 1; c.height = GH >> 1; const g = c.getContext('2d'), im = g.createImageData(c.width, c.height); build(im.data, c.width, c.height); g.putImageData(im, 0, 0); this.overlays[key] = c; } return this.overlays[key]; }
@@ -121,7 +122,8 @@ export class Renderer {
     const e = this.reduced ? 1 : 1 - Math.pow(1 - FEEL.CAMERA_EASE, dt * 60); c.x += (this.to.x - c.x) * e; c.y += (this.to.y - c.y) * e; c.s += (this.to.s - c.s) * e;
     for (const k of LIGHTS) { const tgt = sim.light === k ? 1 : 0, rate = dt / (this.reduced ? 0.4 : FEEL.LIGHT_SECONDS); this.L[k] = clamp(this.L[k] + clamp(tgt - this.L[k], -rate, rate), 0, 1); }
     const Lsum = LIGHTS.reduce((n, k) => n + this.L[k], 0) || 1, L = {}; for (const k of LIGHTS) L[k] = this.L[k] / Lsum;
-    const gd = sim.gameday, lampsT = gd ? gd.lights : 0; this.lamps += (lampsT - this.lamps) * Math.min(1, dt * 6);
+    this.flash = Math.max(0, this.flash - dt * 1.6);
+    const gd = sim.gameday, lampsT = gd ? gd.lights : 0; this.lamps += (lampsT - this.lamps) * Math.min(1, dt * 12);
     const sv = [0, 0, 0]; for (const k of LIGHTS) for (let i = 0; i < 3; i++) sv[i] += SHADOW[k][i] * L[k];
     this.surface.flush();
 
@@ -160,6 +162,12 @@ export class Renderer {
     if (this.hint) ov(this.areaOverlay(this.hint), this.reduced ? 0.7 : 0.45 + 0.35 * (0.5 + 0.5 * Math.sin(t * 3.2)));
     if (this.selected && AREAS[this.selected]) ov(this.areaOverlay(this.selected), 0.95);
     if (this.routeFx) { const r = this.routeFx; r.t += dt; const a = clamp(1.6 - r.t, 0, 1) * 0.75; if (a <= 0) this.routeFx = null; else { g.strokeStyle = `rgba(255,248,225,${a})`; g.lineWidth = Math.max(1, 1.2 * s); g.setLineDash([5 * s, 5 * s]); g.lineDashOffset = -t * 30; g.beginPath(); for (const sg of r.segs) { g.moveTo(X(sg.a[0]), Y(sg.a[1])); g.lineTo(X(sg.b[0]), Y(sg.b[1])); } g.stroke(); g.setLineDash([]); } }
+    // a finished stripe catches the light: a flash along its whole length, then a glint that runs back down it
+    for (let i = this.sheens.length - 1; i >= 0; i--) { const sh = this.sheens[i], sg = sh.seg; sh.t += dt; const dur = sh.first ? 1.5 : 0.9; if (sh.t > dur) { this.sheens.splice(i, 1); continue; }
+      const k = sh.t / dur, nx = -sg.dir[1] * sg.W / 2, ny = sg.dir[0] * sg.W / 2, A = sg.b, B = sg.a, q = (p, sgn) => [X(p[0] + nx * sgn), Y(p[1] + ny * sgn)], c0 = q(A, 1), c1 = q(A, -1), c2 = q(B, -1), c3 = q(B, 1);
+      const gr = g.createLinearGradient(X(A[0]), Y(A[1]), X(B[0]), Y(B[1])), base = (sh.first ? 0.34 : 0.16) * Math.max(0, 1 - k * 2.2), peak = sh.first ? 0.62 : 0.34, c = Math.min(0.98, k * 1.25), w = 0.09;
+      gr.addColorStop(0, `rgba(255,252,220,${base})`); gr.addColorStop(Math.max(0, c - w), `rgba(255,252,220,${base})`); if (c < 0.98) gr.addColorStop(c, `rgba(255,252,220,${peak * (1 - k * 0.5)})`); gr.addColorStop(Math.min(1, c + w), `rgba(255,252,220,${base})`); gr.addColorStop(1, `rgba(255,252,220,${base})`);
+      g.fillStyle = gr; g.beginPath(); g.moveTo(c0[0], c0[1]); g.lineTo(c1[0], c1[1]); g.lineTo(c2[0], c2[1]); g.lineTo(c3[0], c3[1]); g.closePath(); g.fill(); }
     // bases, plate, rubber
     g.fillStyle = PAL.chalkWhite; for (const b of [FIRST, SECOND, THIRD]) { g.beginPath(); g.moveTo(X(b[0]), Y(b[1] + 2.6)); g.lineTo(X(b[0] + 2.6), Y(b[1])); g.lineTo(X(b[0]), Y(b[1] - 2.6)); g.lineTo(X(b[0] - 2.6), Y(b[1])); g.fill(); }
     g.beginPath(); g.moveTo(X(-1.7), Y(1.7)); g.lineTo(X(1.7), Y(1.7)); g.lineTo(X(1.7), Y(0)); g.lineTo(X(0), Y(-1.7)); g.lineTo(X(-1.7), Y(0)); g.fill(); g.fillRect(X(-1.6), Y(MOUND[1] + 0.5), 3.2 * s, Math.max(1, 0.9 * s));
@@ -203,8 +211,8 @@ export class Renderer {
     this._light(g, X, Y, s, L);
 
     // readable things on top of the light
-    g.font = `${Math.max(11, 9 * s)}px "Alfa Slab One", serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
-    for (let i = this.floats.length - 1; i >= 0; i--) { const f = this.floats[i]; f.t += dt; if (f.t > 1.5) { this.floats.splice(i, 1); continue; } g.globalAlpha = clamp(1.5 - f.t, 0, 1); const fx = X(f.x), fy = Y(f.y, f.z + f.t * 16); g.lineWidth = 3; g.strokeStyle = PAL.fadedNavy; g.strokeText(f.text, fx, fy); g.fillStyle = PAL.brassYellow; g.fillText(f.text, fx, fy); } g.globalAlpha = 1;
+    g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+    for (let i = this.floats.length - 1; i >= 0; i--) { const f = this.floats[i], life = f.big ? 2.4 : 1.5; f.t += dt; if (f.t > life) { this.floats.splice(i, 1); continue; } g.font = `${f.big ? Math.max(20, 15 * s) : Math.max(12, 9 * s)}px "Alfa Slab One", serif`; g.globalAlpha = clamp((life - f.t) * 2, 0, 1); const pop = f.big ? 1 + Math.max(0, 0.25 - f.t) * 1.2 : 1, fx = f.big ? clamp(X(f.x), 96, this.vw - 96) : X(f.x), fy = Math.max(96, Y(f.y, f.z + f.t * (f.big ? 7 : 16))); g.lineWidth = f.big ? 5 * pop : 3; g.strokeStyle = PAL.fadedNavy; g.strokeText(f.text, fx, fy); g.fillStyle = PAL.brassYellow; g.fillText(f.text, fx, fy); } g.globalAlpha = 1;
     for (const w of sim.workers) { if (this.selected !== w.id && this.follow !== w.id) continue; const b = this.workerBox(w); g.strokeStyle = PAL.brassYellow; g.lineWidth = 2; g.beginPath(); g.ellipse(b.cx, this.sy(w.y), 9 * u * 0.9, 4 * u * 0.9, 0, 0, 6.3); g.stroke();
       if (w.job && w.state === ST.WORKING) { const pw = 26, pr = sim.jobProgress(w.job); g.fillStyle = PAL.fadedNavy; g.fillRect(b.cx - pw / 2 - 1, b.y0 - 9, pw + 2, 5); g.fillStyle = PAL.vintageCream; g.fillRect(b.cx - pw / 2, b.y0 - 8, pw, 3); g.fillStyle = PAL.brassYellow; g.fillRect(b.cx - pw / 2, b.y0 - 8, pw * pr, 3); } }
   }
@@ -307,6 +315,7 @@ export class Renderer {
       g.globalCompositeOperation = 'lighter';
       TOWERS.forEach((p, i) => { if (lit < (i + 1) / 4 - 0.01) return; const lx = X(p[0]), ly = Y(p[1], 83), gr2 = g.createRadialGradient(lx, ly, 0, lx, ly, 62 * s); gr2.addColorStop(0, 'rgba(255,240,190,.85)'); gr2.addColorStop(0.25, 'rgba(255,236,180,.3)'); gr2.addColorStop(1, 'rgba(255,236,180,0)'); g.fillStyle = gr2; g.fillRect(lx - 62 * s, ly - 62 * s, 124 * s, 124 * s); });
       if (this.sim.gameday && this.sim.gameday.board.on) { const bx = X(0), by = Y(BOARD.y, BOARD.z + BOARD.h / 2), gr3 = g.createRadialGradient(bx, by, 0, bx, by, 80 * s); gr3.addColorStop(0, 'rgba(255,214,130,.3)'); gr3.addColorStop(1, 'rgba(255,214,130,0)'); g.fillStyle = gr3; g.fillRect(bx - 80 * s, by - 80 * s, 160 * s, 160 * s); } }
+    if (this.flash > 0.01) { g.globalAlpha = 1; g.globalCompositeOperation = 'lighter'; g.fillStyle = `rgba(255,240,200,${0.3 * this.flash})`; g.fillRect(0, 0, w, h); }
     g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
   }
 }

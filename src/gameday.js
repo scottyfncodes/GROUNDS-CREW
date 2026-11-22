@@ -44,8 +44,8 @@ export class GameDay {
         const clear = sim.workers.every((w) => w.state === 'IDLE' && !w.path);
         if (this.pt > 0.8 && (clear || this.pt > 14)) { this.go('dusk'); sim.light = 'golden'; this.crowdTarget = 0.5; this.say('Gates are open.', 3); }
         break; }
-      case 'dusk': if (this.pt > 4.5) { this.go('lights'); sim.light = 'night'; for (let i = 0; i < 4; i++) this.at(0.3 + i * 0.55, () => { this.lights = (i + 1) / 4; sim.emit('tower', { i }); }); } break;
-      case 'lights': if (this.pt > 3.2) { this.board.on = true; this.crowdTarget = 0.9; sim.emit('organ', {}); this.go('players'); this.takeField(); } break;
+      case 'dusk': if (this.pt > 4.5) { this.go('lights'); sim.light = 'night'; for (let i = 0; i < 4; i++) this.at(0.3 + i * 0.55, () => { this.lights = (i + 1) / 4; sim.emit('tower', { i }); if (i === 3) { this.board.on = true; this.cheer = 1; this.crowdTarget = 0.9; this.crowd = Math.max(this.crowd, 0.62); this.say('Lights on at Cloverfield Park.', 3.2); sim.emit('organ', {}); } }); } break;
+      case 'lights': if (this.pt > 5.4) { this.go('players'); this.takeField(); } break;
       case 'players': if (this.pt > 5.2) { this.go('plays'); this.nextPlay(); } break;
       case 'plays': break;
       case 'final': if (this.pt > 3.4) this.finish(); break;

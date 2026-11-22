@@ -80,13 +80,13 @@ function boot() {
   const test = {
     assign: (who, type, pattern) => { const key = Object.keys(JOBS).find((k) => k === type || k.startsWith(type + ':')); return sim.assign(who, key, pattern).ok; },
     advance: (secs) => stepSim(Math.round(secs / FEEL.SIM_DT)),
-    advanceTo: (what) => { for (let i = 0; i < 9000; i++) { const j = sim.jobs['mow:outfield']; if (what === 'before-first-stripe' && j && j.worker.state === ST.WORKING && j.si === 0 && dist(j.segs[0].a, j.segs[0].b) - j.sd < 62) break; sim.step(FEEL.SIM_DT); } },
+    advanceTo: (what) => { for (let i = 0; i < 9000; i++) { const j = sim.jobs['mow:outfield'], seg = j && j.segs[j.si]; if (what === 'before-first-stripe' && seg && j.worker.state === ST.WORKING && seg.work && dist(seg.a, seg.b) >= 140 && dist(seg.a, seg.b) - j.sd < 70) break; sim.step(FEEL.SIM_DT); } },
     finishAll: () => { sim.workers.forEach((w) => { if (w.job) sim.cancel(w.id); }); surface.finishAll(); sim.refresh(); },
     skipGame: () => game.skipGame(), give: (n) => { sim.bucks += n; }, game,
   };
   window.__game = {
     get state() { return sim.mode; }, get playing() { return sim.mode === 'day' || sim.mode === 'gameday'; }, get day() { return sim.day; }, get score() { return sim.bucks; }, get bucks() { return sim.bucks; }, get time() { return sim.time; }, get speed() { return game.paused ? 0 : game.speed; },
-    get stats() { const c = sim.cond || sim.refresh(); return { grass: c.grass, dirt: c.dirt, lines: c.lines, field: c.field, stripes: sim.stripes, jobsDone: sim.doneToday, areas: c.areas }; },
+    get stats() { const c = sim.cond || sim.refresh(); return { grass: c.grass, dirt: c.dirt, lines: c.lines, field: c.field, stripes: sim.stripes, firstStripe: sim.firstStripe, jobsDone: sim.doneToday, areas: c.areas }; },
     get gameday() { const g = sim.gameday; return g ? { phase: g.phase, lights: g.lights, crowd: g.crowd, home: g.board.home, away: g.board.away } : null; },
     get workers() { return sim.workers.map((w) => ({ id: w.id, state: w.state, x: w.x, y: w.y, equip: w.equip, job: w.job ? w.job.key : null })); },
     test,

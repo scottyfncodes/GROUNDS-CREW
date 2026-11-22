@@ -7,7 +7,7 @@
  {"id": "first-stripe", "name": "The first stripe is finished", "kind": "moment", "moment": "first-stripe",
   "steps": [{"selector": "#start"}, {"eval": "window.__game.test.assign('gus','mow','classic'); window.__game.test.advanceTo('before-first-stripe')"}],
   "sequence": {"after_ms": 1600},
-  "wait_for": {"js": "window.__game.stats.stripes >= 1", "timeout_ms": 20000}},
+  "wait_for": {"js": "window.__game.stats.firstStripe === true", "timeout_ms": 20000}},
  {"id": "lights-on", "name": "Open the gates: the lights come on and the crowd is in", "kind": "moment", "moment": "lights-on",
   "steps": [{"selector": "#start"}, {"eval": "window.__game.test.finishAll()"}, {"selector": "#open-gates"}],
   "sequence": {"after_ms": 2500},

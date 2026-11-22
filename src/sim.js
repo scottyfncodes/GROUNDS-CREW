@@ -36,7 +36,7 @@ export class Sim {
     this.mode = 'title'; this.day = 1; this.bucks = 0; this.seed = 1948; this.speed = 1; this.time = 0;
     this.upgrades = {}; this.patterns = { outfield: 'classic', infield: 'classic' }; this.tutorial = 0;
     this.jobs = {}; this.equip = { rider: null, push: null, mat: null, rake: null, chalker: null };
-    this.paid = {}; this.earned = 0; this.doneToday = 0; this.stripes = 0; this.light = 'morning';
+    this.paid = {}; this.earned = 0; this.doneToday = 0; this.stripes = 0; this.firstStripe = false; this.light = 'morning';
     this.workers = []; this.gameday = null; this.summary = null; this.gather = null; this.record = { w: 0, l: 0 };
     this.rng = mulberry(this.seed); this._statT = 0; this.cond = null;
     this._crew();
@@ -120,7 +120,7 @@ export class Sim {
   }
   nextDay() {
     if (this.mode !== 'summary') return false;
-    this.day++; this.surface.wear(this.seed, this.day); this.paid = {}; this.earned = 0; this.doneToday = 0; this.stripes = 0; this.gameday = null; this.summary = null; this.light = 'morning'; this.mode = 'day';
+    this.day++; this.surface.wear(this.seed, this.day); this.paid = {}; this.earned = 0; this.doneToday = 0; this.stripes = 0; this.firstStripe = false; this.gameday = null; this.summary = null; this.light = 'morning'; this.mode = 'day';
     this.workers.forEach((w) => { w.x = w.px = w.home[0]; w.y = w.py = w.home[1]; w.path = null; w.state = ST.IDLE; w.pose = 'stand'; w.moving = false; w.idleT = 1 + this.rng() * 4; });
     this.refresh(); this.emit('newday'); return true;
   }
@@ -199,7 +199,11 @@ export class Sim {
       }
       job.sd = d1; job.done += go; budget -= speed > 0 ? go / speed : budget; w.step += go; w.moving = true; w.working = seg.work;
       if (job.sd >= len - 1e-6) {
-        if (seg.work && seg.endOfLane) { if (job.type === 'mow') { this.stripes++; job.lanes = (job.lanes || 0) + 1; if (this.tutorial === 1) this.tutorial = 2; } this.emit('stripe', { seg, job, worker: w }); }
+        if (seg.work && seg.endOfLane) { let first = false;
+          if (job.type === 'mow') { this.stripes++; job.lanes = (job.lanes || 0) + 1;
+            // the first full-length stripe of the day is the moment: the short corner passes before it do not count
+            if (!this.firstStripe && len >= 140) { first = this.firstStripe = true; w.cheer = 1.3; if (this.tutorial === 1) this.tutorial = 2; } }
+          this.emit('stripe', { seg, job, worker: w, first }); }
         job.si++; job.sd = 0;
       }
     }
