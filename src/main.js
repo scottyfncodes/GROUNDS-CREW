@@ -31,7 +31,7 @@ function boot() {
     if (sim.mode === 'title') { const sign = rect('.sign'), foot = rect('.title-foot'); if (!sign || !foot) return { top: 120, bottom: 120 };
       if (land && innerHeight < 520) return { top: 64, bottom: 8 };                       // short landscape: sign and button sit beside the park
       // portrait lets the back of the slab tuck under the note, as the chosen frame does; wide screens keep the park clear of both
-      return land ? { top: sign.bottom + 10, bottom: innerHeight - foot.top + 10 } : { top: sign.bottom - 4, bottom: Math.max(60, innerHeight - foot.top - 64) }; }
+      return land ? { top: sign.bottom - 6, bottom: Math.max(40, innerHeight - foot.top - 70) } : { top: sign.bottom - 4, bottom: Math.max(60, innerHeight - foot.top - 64) }; }
     if (sim.mode === 'summary') { const b = rect('#summary'); if (b && !(land && innerHeight < 520)) return { top: 54 + sat, bottom: innerHeight - b.top + 10 }; }
     const cover = game.ui ? game.ui.cover() : 0; return { top: 54 + sat, bottom: cover ? cover + 8 : land && innerHeight < 520 ? 20 : 78 }; };
   const layout = () => { r.resize(); r.frame(insets()); };

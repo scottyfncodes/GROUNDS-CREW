@@ -129,6 +129,7 @@ body[data-mode="gameday"] #chip-field { pointer-events: none; }
   .title-foot { width: auto; align-items: flex-end; } .title .note { font-size: var(--t-m); }
   .prompt { bottom: calc(var(--sab) + var(--s3)); left: calc(var(--sal) + var(--s3)); transform: none; max-width: 44%; }
 }
+@media (min-width: 900px) and (min-height: 560px) { .title { padding-top: calc(var(--sat) + var(--s3)); } .sign h1 { max-width: none; font-size: clamp(44px, 7vh, 64px); } .sign i { display: none; } }
 @media (min-width: 900px) { :root { --t-xs: 14px; --t-s: 16px; --t-m: 18px; --t-l: 22px; } .sheet { margin: 0 auto; } .bar { gap: var(--s3); } }
 @media (max-width: 359px) { .tab { padding: 0 var(--s2); min-width: 46px; font-size: var(--t-s); } .chip { padding: 0 var(--s2); } .enamel--bar { font-size: var(--t-s); padding: 0 var(--s2); } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
