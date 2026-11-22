@@ -2,10 +2,11 @@
 // two teams take the field you prepared and play a few scripted moments. Not a baseball engine: a vignette.
 
 import { FIELDERS, DUGOUT, FIRST, SECOND, THIRD, HOME, MOUND, dist } from './geometry.js';
-import { PAY } from './config.js';
-import { mulberry } from './sim.js';
+import { PAY, SEASON_GAMES } from './config.js';
+import { mulberry } from './rng.js';
 
 const BASES = [HOME, FIRST, SECOND, THIRD];
+const cardLabel = (c) => ({ pattern: 'Special request', rain: 'Dry infield', kids: "Kids' Day lines", fireworks: 'Fireworks Night crowd', rivalry: 'Rivalry crowd' }[c.event] || 'Tonight');
 const PLAYS = ['single', 'fly', 'homer', 'grounder', 'strikeout', 'double'];
 
 export class GameDay {
@@ -19,8 +20,11 @@ export class GameDay {
     this.plays = [pick(), pick(), pick()]; if (!this.plays.some((p) => p === 'single' || p === 'double' || p === 'homer')) this.plays[1] = 'single';
     if (this.rng() < 0.45 && !this.plays.includes('homer')) this.plays[2] = 'homer';
     let on = 0, runs = 0; for (const p of this.plays) { if (p === 'single') { if (on >= 3) { runs++; on--; } on++; } else if (p === 'double') { runs += Math.max(0, on - 1); on = Math.min(on, 1) + 1; } else if (p === 'homer') { runs += on + 1; on = 0; } }
-    this.final = { home: runs + Math.floor(this.rng() * 3), away: Math.floor(this.rng() * 4) }; if (this.final.home === this.final.away) this.final.home++;
-    this.field = sim.refresh().field;
+    // a well-kept park is worth something: the Clovers play better at home on a field they are proud of
+    this.field = sim.refresh().field; this.card = sim.card; this.met = sim.cardMet(); this.fireworks = this.card.event === 'fireworks'; this.sparks = 0;
+    const win = this.rng() < 0.3 + 0.45 * this.field; let home = runs + Math.floor(this.rng() * 3), away = Math.floor(this.rng() * 4);
+    if (win && home <= away) home = away + 1 + Math.floor(this.rng() * 2); if (!win && away <= home) away = home + 1 + Math.floor(this.rng() * 2);
+    this.final = { home, away };
   }
 
   say(text, secs = 2.6) { this.caption = text; this.captionT = secs; this.sim.emit('caption', { text }); }
@@ -48,7 +52,8 @@ export class GameDay {
       case 'lights': if (this.pt > 5.4) { this.go('players'); this.takeField(); } break;
       case 'players': if (this.pt > 5.2) { this.go('plays'); this.nextPlay(); } break;
       case 'plays': break;
-      case 'final': if (this.pt > 3.4) this.finish(); break;
+      case 'final': if (this.pt > 3.4) { if (this.fireworks) { this.go('fireworks'); this.say('Fireworks!', 3); } else this.finish(); } break;
+      case 'fireworks': if ((this.sparkT = (this.sparkT || 0) - dt) <= 0) { this.sparkT = 0.35 + this.rng() * 0.5; this.sparks++; sim.emit('firework', { x: (this.rng() - 0.5) * 300, y: 300 + this.rng() * 140, z: 110 + this.rng() * 90, hue: Math.floor(this.rng() * 5) }); this.cheer = Math.max(this.cheer, 0.4); } if (this.pt > 7) this.finish(); break;
     }
   }
   go(phase) { this.phase = phase; this.pt = 0; this.queue.length = 0; }
@@ -58,7 +63,7 @@ export class GameDay {
     this.say('Here come the teams.', 3);
   }
 
-  batter() { const b = this.actor('home', 'BAT', DUGOUT.home, [-7, 0.5], 40); b.face = 1; return b; }
+  batter() { const b = this.actor('home', 'BAT', DUGOUT.home, [-7, 0.5], 40); b.face = 1; this.sim.emit('walkup', {}); return b; }
   retire(a) { this.send(a, DUGOUT.home, 36); this.at(5, () => { this.actors = this.actors.filter((x) => x !== a); }); }
   score(n) { if (n > 0) { this.board.home += n; this.cheer = 1; this.sim.emit('score', { n }); } }
   advance(bases, bat) {                                          // everyone on base moves up; the batter joins them
@@ -71,7 +76,7 @@ export class GameDay {
 
   nextPlay() {
     if (this.playI >= this.plays.length) { this.go('final'); this.board.home = this.final.home; this.board.away = this.final.away; this.board.inning = 9;
-      this.say(this.final.home > this.final.away ? `Clovers win, ${this.final.home}–${this.final.away}.` : `Visitors take it, ${this.final.away}–${this.final.home}.`, 3.4); this.cheer = 1; this.sim.emit('final', { win: this.final.home > this.final.away }); return; }
+      this.say(this.final.home > this.final.away ? `Clovers win, ${this.final.home}–${this.final.away}.` : `The ${this.card.opp.short} take it, ${this.final.away}–${this.final.home}.`, 3.4); this.cheer = 1; this.sim.emit('final', { win: this.final.home > this.final.away }); return; }
     const kind = this.plays[this.playI++], bat = this.batter(), P = this.who('P'), f = (r) => this.who(r), back = (a, r) => this.at(1.2, () => this.send(a, FIELDERS[r], 30)), end = (t) => this.at(t, () => { this.pt = 0; this.queue.length = 0; this.nextPlay(); });
     this.pt = 0;
     this.at(1.9, () => { if (P) P.pose = 'throw'; this.throwBall(MOUND, [0, 1], 0.5, 1.5); this.sim.emit('pitch', {}); });
@@ -91,13 +96,19 @@ export class GameDay {
       this.at(3.4, () => { this.throwBall(ss, FIELDERS['1B'], 0.7, 7); }); this.at(4.2, () => { this.say('Out at first.'); this.sim.emit('clap', {}); this.retire(bat); }); end(6.2); }
   }
 
-  /** The day summary: what the gate pays, and a bonus for how good the field looked. */
+  /** The day summary: what the gate pays, a bonus for how good the field looked, tonight's card, the league. */
   finish() {
-    if (this.done) return; this.done = true; const sim = this.sim;
+    if (this.done) return; this.done = true; const sim = this.sim, card = this.card;
     this.board.on = true; this.board.home = this.final.home; this.board.away = this.final.away; this.lights = 1; this.crowd = this.crowdTarget = 0.9; sim.light = 'night';
-    const craft = Math.round(this.field * PAY.craft / 5) * 5, win = this.final.home > this.final.away; if (win) sim.record.w++; else sim.record.l++;
-    sim.bucks += PAY.gate + craft;
-    sim.summary = { day: sim.day, home: this.final.home, away: this.final.away, win, field: this.field, jobs: sim.earned, gate: PAY.gate, craft, total: sim.earned + PAY.gate + craft, bucks: sim.bucks, record: { ...sim.record } };
+    let craft = Math.round(this.field * PAY.craft / 5) * 5; const win = this.final.home > this.final.away; if (win) { sim.record.w++; sim.season.w++; } else { sim.record.l++; sim.season.l++; }
+    const rows = [{ label: 'Jobs done today', v: sim.earned }, { label: 'Gate', v: PAY.gate }];
+    if (card.event === 'scout' && this.met) { craft *= 2; rows.push({ label: `Craftsmanship × 2 · the scout noticed`, v: craft }); } else rows.push({ label: `Craftsmanship · field ${Math.round(this.field * 100)}%`, v: craft });
+    if (card.event && card.event !== 'scout') rows.push({ label: this.met ? cardLabel(card) : `${cardLabel(card)} · missed`, v: this.met ? card.bonus : 0 });
+    const charm = sim.charm(); if (charm) rows.push({ label: 'Park charm', v: charm });
+    const total = rows.reduce((n, r) => n + r.v, 0), paid = total - sim.earned; sim.bucks += paid;
+    const seasonOver = card.game === SEASON_GAMES, table = sim.standingsAfter(), place = table.findIndex((t) => t.us) + 1, pennant = seasonOver && place === 1;
+    if (pennant) sim.banners.push(card.season);
+    sim.summary = { day: sim.day, season: card.season, game: card.game, opp: card.opp, home: this.final.home, away: this.final.away, win, field: this.field, rows, total, bucks: sim.bucks, record: { ...sim.season }, place, table: table.slice(0, 6), seasonOver, pennant, next: sim.nextCard() };
     sim.mode = 'summary'; this.phase = 'over'; this.caption = ''; sim.emit('summary', sim.summary);
   }
   skip() { this.finish(); }

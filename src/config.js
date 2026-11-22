@@ -3,7 +3,7 @@
 
 export const PAL = {
   // grass
-  deepEmerald: '#2f6b45', freshCut: '#86b85c', sunlit: '#9fcb6c', cutDark: '#629c49', mutedOlive: '#6f8f42', shadowGreen: '#3f6e3a', dryGrass: '#9a9a52',
+  deepEmerald: '#2f6b45', freshCut: '#86b85c', sunlit: '#9fcb6c', cutDark: '#629c49', mutedOlive: '#6a9445', shadowGreen: '#386a38', dryGrass: '#8f9a55',
   // infield
   terracotta: '#b8683f', richClay: '#a85a36', dustyCinnamon: '#a8623f', groomedEarth: '#cf8c5c', scuffDark: '#7c4a30',
   // architecture
@@ -41,18 +41,42 @@ export const FEEL = {
 export const PAY = { 'mow:outfield': 40, 'mow:infield': 15, 'mow:foul': 20, 'drag:skin': 25, 'rake:mound': 10, 'chalk:lines': 20, gate: 30, craft: 70 };
 
 export const UPGRADES = [
-  { id: 'mower', name: 'Better Mower', cost: 300, blurb: 'A green pro rider. Cuts half again as fast.' },
-  { id: 'mat', name: 'Pro Drag Mat', cost: 220, blurb: 'A wide steel mat. Faster, smoother infield.' },
-  { id: 'patterns', name: 'Pattern Book', cost: 180, blurb: 'Adds the Diamonds cut to every mower.' },
-  { id: 'crew3', name: 'Hire Pearl', cost: 450, blurb: 'A third pair of hands, straw hat included.' },
+  { id: 'mower', kind: 'equipment', name: 'Better Mower', cost: 300, blurb: 'A green pro rider. Cuts half again as fast.' },
+  { id: 'mat', kind: 'equipment', name: 'Pro Drag Mat', cost: 220, blurb: 'A wide steel mat. Faster, smoother infield.' },
+  { id: 'patterns', kind: 'equipment', name: 'Pattern Book', cost: 180, blurb: 'Two new cuts: Diamonds, and Fan Arcs for the outfield.' },
+  { id: 'crew3', kind: 'equipment', name: 'Hire Pearl', cost: 450, blurb: 'A third pair of hands, straw hat included.' },
+  { id: 'bunting', kind: 'ballpark', name: 'Bunting', cost: 140, blurb: 'Red, cream and navy along the grandstand. +10 at the gate.' },
+  { id: 'flowers', kind: 'ballpark', name: 'Flower beds', cost: 160, blurb: 'Beds by the gates, the shed and the scoreboard. +10 at the gate.' },
+  { id: 'ivy', kind: 'ballpark', name: 'Outfield ivy', cost: 260, blurb: 'Ivy on the outfield wall, the old-fashioned way. +15 at the gate.' },
 ];
+export const CHARM = { bunting: 10, flowers: 10, ivy: 15 };
+
+export const SEASON_GAMES = 12;
+export const OPPONENTS = [
+  { id: 'otters', name: 'Riverside Otters', short: 'Otters', color: '#3f6e8c' },
+  { id: 'millers', name: 'Millbrook Millers', short: 'Millers', color: '#8a6a48' },
+  { id: 'gulls', name: 'Lakeport Gulls', short: 'Gulls', color: '#6aa6c4' },
+  { id: 'owls', name: 'Pine Hollow Owls', short: 'Owls', color: '#5a4a7a' },
+  { id: 'foxes', name: 'Ashford Foxes', short: 'Foxes', color: '#c4602a' },
+];
+/** The day's card: something about tonight that makes a choice matter. Bonuses are paid at the gate. */
+export const EVENTS = {
+  pattern: { name: 'Special request', bonus: 40 },
+  scout: { name: 'Scout in the stands', bonus: 0 },
+  rain: { name: 'Rain overnight', bonus: 30 },
+  kids: { name: "Kids' Day", bonus: 30 },
+  fireworks: { name: 'Fireworks Night', bonus: 20 },
+  rivalry: { name: 'Rivalry game', bonus: 40 },
+};
 
 export const PATTERNS = [
   { id: 'classic', name: 'Classic Stripes' },
   { id: 'diagonal', name: 'Diagonal Stripes' },
   { id: 'checker', name: 'Checkerboard' },
   { id: 'diamonds', name: 'Diamonds', needs: 'patterns' },
+  { id: 'arcs', name: 'Fan Arcs', needs: 'patterns', only: 'outfield' },
 ];
+export const REQUESTABLE = ['classic', 'diagonal', 'checker'];
 
 export const SAVE_KEY = 'grounds-crew-save';
 export const SAVE_VERSION = 1;

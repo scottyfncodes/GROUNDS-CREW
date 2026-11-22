@@ -14,5 +14,5 @@ export function loadSave() {
 }
 export function writeSave(game) { const ls = store(); if (!ls) return false; try { ls.setItem(SAVE_KEY, JSON.stringify({ v: SAVE_VERSION, at: Date.now(), game })); return true; } catch { return false; } }
 export function clearSave() { const ls = store(); if (ls) try { ls.removeItem(SAVE_KEY); } catch { /* nothing to clear */ } }
-export function loadSettings() { const d = { volume: 0.7, muted: false }; const ls = store(); if (!ls) return d; try { const s = JSON.parse(ls.getItem(SETTINGS_KEY) || '{}'); return { volume: Number.isFinite(s.volume) ? Math.min(1, Math.max(0, s.volume)) : d.volume, muted: s.muted === true }; } catch { return d; } }
+export function loadSettings() { const d = { volume: 0.7, muted: false, director: true }; const ls = store(); if (!ls) return d; try { const s = JSON.parse(ls.getItem(SETTINGS_KEY) || '{}'); return { volume: Number.isFinite(s.volume) ? Math.min(1, Math.max(0, s.volume)) : d.volume, muted: s.muted === true, director: s.director !== false }; } catch { return d; } }
 export function writeSettings(s) { const ls = store(); if (ls) try { ls.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch { /* not saved */ } }

@@ -1,7 +1,9 @@
 // The simulation: crew state machines, job scheduling, the day loop, the economy. Fixed timestep, no DOM.
 // Everything visible is derived from this state; the renderer and UI only read it.
 
-import { FEEL, PAY, UPGRADES, PATTERNS } from './config.js';
+import { FEEL, PAY, UPGRADES, PATTERNS, SEASON_GAMES, CHARM } from './config.js';
+import { tonight, cardMet, seasonOf, league } from './season.js';
+import { mulberry } from './rng.js';
 import { AREAS, NAV, region, RG, dist } from './geometry.js';
 import { mowRoute, dragRoute, rakeRoute, chalkRoute, routeLength } from './routes.js';
 import { GameDay } from './gameday.js';
@@ -28,7 +30,13 @@ const CREW = [
   { id: 'pearl', name: 'Pearl', bio: 'Tall, quiet, never misses a spot.', pace: 1.0 },
 ];
 
-export function mulberry(a) { return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+export { mulberry };
+
+const LINES = {
+  gus: ['Now that\'s a stripe.', 'Grass don\'t cut itself.', 'Back in \'58 we did this by hand.', 'Coffee\'s gone cold again.', 'Smooth as a church floor.', 'She\'s looking good, boss.'],
+  frankie: ['Ooh, look at that!', 'Can I drive next time?', 'Is that a cat on the wall?', 'Done! What\'s next?', 'That line is SO straight.', 'I waved at the scoreboard.'],
+  pearl: ['Missed a spot. Kidding.', 'Nice and tidy.', 'Lines are true.', 'Good dirt.', 'Mm. That\'ll play.'],
+};
 
 export class Sim {
   constructor(surface, emit = () => {}) {
@@ -38,6 +46,7 @@ export class Sim {
     this.jobs = {}; this.equip = { rider: null, push: null, mat: null, rake: null, chalker: null };
     this.paid = {}; this.earned = 0; this.doneToday = 0; this.stripes = 0; this.firstStripe = false; this.light = 'morning';
     this.workers = []; this.gameday = null; this.summary = null; this.gather = null; this.record = { w: 0, l: 0 };
+    this.season = { w: 0, l: 0 }; this.banners = []; this.patternDone = {}; this.wet = 0; this.sayT = 6; this.card = tonight(this.seed, this.day);
     this.rng = mulberry(this.seed); this._statT = 0; this.cond = null;
     this._crew();
   }
@@ -53,7 +62,15 @@ export class Sim {
   refresh() { this.cond = this.surface.stats(); return this.cond; }
   worker(id) { return this.workers.find((w) => w.id === id); }
   freeWorker(near) { const free = this.workers.filter((w) => w.state === ST.IDLE); if (!free.length) return null; return near ? free.sort((a, b) => dist([a.x, a.y], near) - dist([b.x, b.y], near))[0] : free[0]; }
-  patternsOwned() { return PATTERNS.filter((p) => !p.needs || this.upgrades[p.needs]); }
+  patternsOwned(area) { return PATTERNS.filter((p) => (!p.needs || this.upgrades[p.needs]) && (!p.only || !area || p.only === area)); }
+  cardMet() { return this.card.event ? cardMet(this.card, this.cond || this.refresh(), this.patternDone) : false; }
+  charm() { let c = 0; for (const k in CHARM) if (this.upgrades[k]) c += CHARM[k]; return c; }
+  standings() { return league(this.seed, this.card.season, this.card.game - (this.mode === 'summary' ? 0 : 1), this.season); }
+  standingsAfter() { return league(this.seed, this.card.season, this.card.game, this.season); }
+  nextCard() { return tonight(this.seed, this.day + 1); }
+  /** A groundskeeper says something, now and then. */
+  say(w, text, secs = 3.4) { if (!w || (this.sayT > 0 && !text.force)) return; w.say = { text, t: secs }; this.sayT = 14; }
+  chatter(w, kind) { const pool = LINES[w.id]; if (pool && this.rng() < (kind === 'force' ? 1 : 0.45)) this.say(w, pool[Math.floor(this.rng() * pool.length)]); }
   /** Why a job cannot start right now, or null when it can. */
   blocked(key, workerId) {
     const def = JOBS[key]; if (!def) return 'No such job';
@@ -85,7 +102,7 @@ export class Sim {
   assign(workerId, key, pattern) {
     const why = this.blocked(key, workerId); if (why) return { ok: false, reason: why };
     const def = JOBS[key], w = workerId ? this.worker(workerId) : this.freeWorker(NAV.door);
-    if (def.patterned) { const owned = this.patternsOwned().map((p) => p.id); pattern = owned.includes(pattern) ? pattern : this.patterns[def.area] || 'classic'; this.patterns[def.area] = pattern; }
+    if (def.patterned) { const owned = this.patternsOwned(def.area).map((p) => p.id); pattern = owned.includes(pattern) ? pattern : this.patterns[def.area] || 'classic'; this.patterns[def.area] = pattern; }
     const W = def.equip === 'rider' ? FEEL.RIDER_WIDTH : FEEL.PUSH_WIDTH;
     const plan = def.type === 'mow' ? mowRoute(def.area, pattern, W) : def.type === 'drag' ? dragRoute() : def.type === 'rake' ? rakeRoute() : chalkRoute();
     const job = { key, type: def.type, area: def.area, areaId: AREAS[def.area].id, pattern, worker: w, segs: plan.segs, parityAt: plan.parityAt, si: 0, sd: 0, pass: 1, total: routeLength(plan.segs), done: 0, age: 0 };
@@ -106,7 +123,7 @@ export class Sim {
   buy(id) {
     const u = UPGRADES.find((x) => x.id === id); if (!u || this.upgrades[id] || this.bucks < u.cost) return false;
     this.bucks -= u.cost; this.upgrades[id] = true; this._crew();
-    const spot = id === 'mower' ? NAV.park.rider : id === 'mat' ? NAV.park.mat : null;
+    const spot = id === 'mower' ? NAV.park.rider : id === 'mat' ? NAV.park.mat : id === 'flowers' ? [-200, 58] : null;
     if (spot) { this.gather = { at: spot, t: 5 }; this.workers.filter((w) => w.state === ST.IDLE).forEach((w, i) => { w.path = this._pathTo(w, [spot[0] + 12 + i * 9, spot[1] - 6 - i * 3]); w.pi = 0; }); }
     this.emit('buy', { id }); return true;
   }
@@ -120,15 +137,20 @@ export class Sim {
   }
   nextDay() {
     if (this.mode !== 'summary') return false;
-    this.day++; this.surface.wear(this.seed, this.day); this.paid = {}; this.earned = 0; this.doneToday = 0; this.stripes = 0; this.firstStripe = false; this.gameday = null; this.summary = null; this.light = 'morning'; this.mode = 'day';
+    if (this.summary && this.summary.seasonOver) this.season = { w: 0, l: 0 };
+    this.day++; this.card = tonight(this.seed, this.day); this.surface.wear(this.seed, this.day, this.card.event === 'rain'); this.wet = this.card.event === 'rain' ? 1 : 0; this.patternDone = {}; this.paid = {}; this.earned = 0; this.doneToday = 0; this.stripes = 0; this.firstStripe = false; this.gameday = null; this.summary = null; this.light = 'morning'; this.mode = 'day';
     this.workers.forEach((w) => { w.x = w.px = w.home[0]; w.y = w.py = w.home[1]; w.path = null; w.state = ST.IDLE; w.pose = 'stand'; w.moving = false; w.idleT = 1 + this.rng() * 4; });
-    this.refresh(); this.emit('newday'); return true;
+    this.refresh(); this.emit('newday'); this.sayT = 0;
+    const talker = this.workers[this.day % this.workers.length], ev = this.card.event;
+    if (ev === 'rain') this.say(talker, 'Infield\'s a swamp, boss.', 4); else if (ev === 'pattern') this.say(talker, `Heard the ${this.card.opp.short} like it fancy.`, 4); else if (ev === 'kids') this.say(talker, 'Kids\' Day! Bright lines!', 4); else if (ev === 'scout') this.say(talker, 'Scout tonight. No pressure.', 4); else this.chatter(talker, 'force');
+    return true;
   }
 
   // ---- the step ----------------------------------------------------------------------------------------
 
   step(dt) {
-    this.time += dt;
+    this.time += dt; if (this.sayT > 0) this.sayT -= dt; for (const w of this.workers) if (w.say && (w.say.t -= dt) <= 0) w.say = null;
+    if (this.wet > 0 && this.mode === 'day') this.wet = Math.max(this.cond && this.cond.areas.skin > 0.97 ? 0 : 0.25, this.wet - dt / 240);
     for (const w of this.workers) { w.px = w.x; w.py = w.y; this._worker(w, dt); }
     if (this.gather && (this.gather.t -= dt) <= 0) { this.gather = null; this.workers.filter((w) => w.state === ST.IDLE).forEach((w) => this._goIdle(w)); }
     if (this.mode === 'gameday') this.gameday.step(dt);
@@ -192,7 +214,8 @@ export class Sim {
       if (seg.work && seg.pass === 2 && job.pass === 1) { job.pass = 2; S.beginSecondPass(job.areaId); }
       w.x = seg.a[0] + ux * d1; w.y = seg.a[1] + uy * d1; if (len) { w.heading = [ux, uy]; if (Math.abs(ux) > 0.15) w.face = ux > 0 ? 1 : -1; }
       if (seg.work) {
-        if (job.type === 'mow') { const va = seg.a[0] * seg.dir[0] + seg.a[1] * seg.dir[1], sgn = (ux * seg.dir[0] + uy * seg.dir[1]) >= 0 ? 1 : -1; S.cutLane(job.areaId, seg.dir, seg.W, seg.k, va + sgn * (d0 - 0.6), va + sgn * (d1 + 0.6), seg.pass); }
+        if (job.type === 'mow' && seg.arc) { const x0 = seg.a[0] + ux * (d0 - 0.8), y0 = seg.a[1] + uy * (d0 - 0.8), x1 = seg.a[0] + ux * (d1 + 0.8), y1 = seg.a[1] + uy * (d1 + 0.8); S.cutArc(job.areaId, seg.W, seg.arc.k, Math.atan2(x0, y0), Math.atan2(x1, y1)); }
+        else if (job.type === 'mow') { const va = seg.a[0] * seg.dir[0] + seg.a[1] * seg.dir[1], sgn = (ux * seg.dir[0] + uy * seg.dir[1]) >= 0 ? 1 : -1; S.cutLane(job.areaId, seg.dir, seg.W, seg.k, va + sgn * (d0 - 0.6), va + sgn * (d1 + 0.6), seg.pass); }
         else if (job.type === 'drag') S.groom(job.areaId, w.x - ux * 3.5, w.y - uy * 3.5, this.upgrades.mat ? FEEL.MAT_PRO_RADIUS : FEEL.MAT_RADIUS);
         else if (job.type === 'rake') S.groom(job.areaId, w.x, w.y, 6.8);
         else S.chalkAt(w.x, w.y, 1.7);
@@ -202,7 +225,7 @@ export class Sim {
         if (seg.work && seg.endOfLane) { let first = false;
           if (job.type === 'mow') { this.stripes++; job.lanes = (job.lanes || 0) + 1;
             // the first full-length stripe of the day is the moment: the short corner passes before it do not count
-            if (!this.firstStripe && len >= 140) { first = this.firstStripe = true; w.cheer = 1.3; if (this.tutorial === 1) this.tutorial = 2; } }
+            if (!this.firstStripe && (seg.lane ? 140 : len) >= 140) { first = this.firstStripe = true; w.cheer = 1.3; this.sayT = 0; this.say(w, w.id === 'gus' ? 'Now that\'s a stripe.' : 'Look at that stripe!'); if (this.tutorial === 1) this.tutorial = 2; } }
           this.emit('stripe', { seg, job, worker: w, first }); }
         job.si++; job.sd = 0;
       }
@@ -214,7 +237,8 @@ export class Sim {
     delete this.jobs[job.key]; w.job = null; this.doneToday++;
     const pay = this.paid[job.key] ? 0 : PAY[job.key]; this.paid[job.key] = true; this.bucks += pay; this.earned += pay;
     w.state = ST.RETURNING; w.path = this._pathTo(w, NAV.park[w.equip]); w.pi = 0; w.cheer = 1.6;
-    this.refresh(); this.emit('jobdone', { worker: w, job, pay });
+    this.refresh(); if (job.type === 'mow' && job.pattern && this.cond.areas[job.area] >= 0.97) this.patternDone[job.area] = job.pattern; if (job.area === 'skin') this.wet = 0;
+    this.emit('jobdone', { worker: w, job, pay }); this.chatter(w);
   }
 
   _idle(w) {                                                          // small unsynchronised idle business
@@ -225,12 +249,13 @@ export class Sim {
     else w.pose = r < 0.4 ? 'look' : r < 0.7 ? 'stretch' : 'sip';
     if (w.pose === 'sip' && others.length && this.rng() < 0.5) { const o = others[0]; o.pose = 'sip'; o.idleT = 3.2; o.face = o.x < w.x ? 1 : -1; w.face = -o.face; this.emit('break', {}); }
     if (w.pose === 'look' || w.pose === 'wave') w.face = 1;
+    if (this.mode === 'day' && this.rng() < 0.12) this.chatter(w);
     w.idleT = 2.4 + this.rng() * 1.8;
   }
 
   // ---- persistence -------------------------------------------------------------------------------------
 
-  toSave() { return { day: this.day, bucks: this.bucks, seed: this.seed, upgrades: this.upgrades, patterns: this.patterns, tutorial: this.tutorial, paid: this.paid, earned: this.earned, doneToday: this.doneToday, light: this.light === 'afternoon' ? 'afternoon' : 'morning', record: this.record, field: this.surface.serialize() }; }
+  toSave() { return { day: this.day, bucks: this.bucks, seed: this.seed, upgrades: this.upgrades, patterns: this.patterns, tutorial: this.tutorial, paid: this.paid, earned: this.earned, doneToday: this.doneToday, light: this.light === 'afternoon' ? 'afternoon' : 'morning', record: this.record, season: this.season, banners: this.banners, patternDone: this.patternDone, wet: this.wet, field: this.surface.serialize() }; }
   fromSave(s) {
     const num = (v, lo, hi, d) => (Number.isFinite(v) && v >= lo && v <= hi ? v : d);
     this.day = Math.floor(num(s.day, 1, 1e6, 1)); this.bucks = Math.floor(num(s.bucks, 0, 1e9, 0)); this.seed = Math.floor(num(s.seed, 0, 2 ** 31, 1948));
@@ -239,6 +264,10 @@ export class Sim {
     this.tutorial = Math.floor(num(s.tutorial, 0, 4, 0)); this.paid = {}; for (const k in JOBS) if (s.paid && s.paid[k]) this.paid[k] = true;
     this.earned = Math.floor(num(s.earned, 0, 1e9, 0)); this.doneToday = Math.floor(num(s.doneToday, 0, 99, 0)); this.light = s.light === 'afternoon' ? 'afternoon' : 'morning';
     this.record = { w: Math.floor(num(s.record && s.record.w, 0, 1e6, 0)), l: Math.floor(num(s.record && s.record.l, 0, 1e6, 0)) };
+    this.season = { w: Math.floor(num(s.season && s.season.w, 0, SEASON_GAMES, 0)), l: Math.floor(num(s.season && s.season.l, 0, SEASON_GAMES, 0)) };
+    this.banners = Array.isArray(s.banners) ? s.banners.filter((b) => Number.isInteger(b) && b > 0 && b < 1000).slice(0, 12) : [];
+    this.patternDone = {}; if (s.patternDone && PATTERNS.some((p) => p.id === s.patternDone.outfield)) this.patternDone.outfield = s.patternDone.outfield;
+    this.wet = num(s.wet, 0, 1, 0); this.card = tonight(this.seed, this.day);
     this.surface.deserialize(s.field); this.rng = mulberry(this.seed + this.day * 7919); this._crew(); this.refresh();
   }
 }

@@ -62,7 +62,7 @@ test('a full day: gates, game, summary, next morning with new wear, upgrades, sa
   assert.equal(sim.gateCheck().unfinished, false); assert.ok(sim.openGates()); assert.equal(sim.mode, 'gameday');
   until(sim, () => sim.gameday.lights >= 1, 60); assert.equal(sim.light, 'night');
   const t = until(sim, () => sim.mode === 'summary', 120); assert.ok(t < 90, `vignette ${t}s`);
-  assert.ok(sim.summary.total >= 100); assert.equal(sim.summary.craft, 70);
+  assert.ok(sim.summary.total >= 100); assert.equal(sim.summary.rows.find((r) => r.label.startsWith('Craftsmanship')).v, 70);
   assert.ok(sim.buy('mower') && sim.buy('crew3')); assert.equal(sim.workers.length, 3); assert.equal(sim.buy('mower'), false);
   assert.ok(sim.nextDay()); assert.equal(sim.day, 2); const c = sim.refresh(); assert.ok(c.field > 0.4 && c.field < 0.8, `morning field ${c.field}`);
   const saved = JSON.parse(JSON.stringify(sim.toSave())); const s2 = new Surface(null), sim2 = new Sim(s2); sim2.fromSave(saved);
@@ -73,4 +73,29 @@ test('a full day: gates, game, summary, next morning with new wear, upgrades, sa
 test('skipping the game pays the same', () => {
   const a = fresh(), b = fresh(); for (const s of [a, b]) { s.surface.finishAll(); s.sim.openGates(); }
   until(a.sim, () => a.sim.mode === 'summary', 120); b.sim.gameday.skip(); assert.deepEqual(a.sim.summary, b.sim.summary);
+});
+
+import { tonight, seasonOf } from '../src/season.js';
+import { SEASON_GAMES } from '../src/config.js';
+
+test('the schedule is fixed by the seed; day 1 is plain, day 2 is a pattern request', () => {
+  assert.equal(tonight(1948, 1).event, null); assert.equal(tonight(1948, 2).event, 'pattern'); assert.ok(tonight(1948, 2).pattern);
+  assert.deepEqual(tonight(1948, 7), tonight(1948, 7)); assert.equal(tonight(1948, SEASON_GAMES).event, 'fireworks'); assert.deepEqual(seasonOf(SEASON_GAMES + 1), { n: 2, game: 1 });
+});
+
+test('a pattern request pays only when the outfield is finished in that pattern', () => {
+  for (const right of [true, false]) {
+    const { sim, surface } = fresh(); sim.day = 2; sim.card = tonight(sim.seed, 2); const want = sim.card.pattern, other = ['classic', 'diagonal', 'checker'].find((p) => p !== want);
+    sim.assign('gus', 'mow:outfield', right ? want : other); until(sim, () => !sim.jobs['mow:outfield']); assert.equal(sim.patternDone.outfield, right ? want : other);
+    sim.openGates(); sim.gameday.skip(); const row = sim.summary.rows.find((r) => r.label.startsWith('Special request')); assert.equal(row.v, right ? 40 : 0);
+  }
+});
+
+test('a better field wins more often, and a season ends in the standings', () => {
+  let goodWins = 0, badWins = 0;
+  for (let d = 1; d <= 40; d++) for (const good of [true, false]) { const { sim, surface } = fresh(); sim.day = d; sim.card = tonight(sim.seed, d); if (good) surface.finishAll(); sim.openGates(); sim.gameday.skip(); if (sim.summary.win) good ? goodWins++ : badWins++; }
+  assert.ok(goodWins > badWins + 4, `good ${goodWins} vs worn ${badWins}`);
+  const { sim, surface } = fresh(); for (let g = 1; g <= SEASON_GAMES; g++) { surface.finishAll(); sim.openGates(); sim.gameday.skip(); if (g < SEASON_GAMES) sim.nextDay(); }
+  assert.equal(sim.summary.seasonOver, true); assert.equal(sim.summary.record.w + sim.summary.record.l, SEASON_GAMES); assert.ok(sim.summary.place >= 1 && sim.summary.place <= 6);
+  assert.equal(sim.banners.length, sim.summary.pennant ? 1 : 0); sim.nextDay(); assert.deepEqual(sim.season, { w: 0, l: 0 }); assert.equal(sim.card.season, 2);
 });
