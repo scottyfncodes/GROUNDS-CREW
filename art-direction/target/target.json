@@ -1,0 +1,33 @@
+{
+ "style": "pixel-art",
+ "look_name": "Pixel Art",
+ "style_how": "named in the request",
+ "liked_in_others": "Person picked A Tabletop Morning with the stripes icon; no note on the others.",
+ "approved_by": "a person (production_approve)",
+ "icon": "stripes",
+ "icon_idea": "The diamond from above on fresh mowing stripes.",
+ "design": "a",
+ "name": "Tabletop Morning",
+ "idea": "Cloverfield Park as a hand-built model on a cream tabletop in morning light, with a painted ballpark sign above it.",
+ "palette": {
+  "background": "#e7dcc3",
+  "surface": "#f1e6cf",
+  "primary": "#2b3a55",
+  "accent": "#d9a441",
+  "text": "#2b3a55"
+ },
+ "type": {
+  "display": "Alfa Slab One",
+  "body": "Barlow Condensed"
+ },
+ "composition": "The whole park leads, centred as a slab with a shadowed edge; the eye lands on the infield, then the crew by the shed; sign above, one enamel button below.",
+ "flavor": "A quiet Sunday morning before anyone else is at the park.",
+ "files": {
+  "phone": "art-direction/target/phone.png",
+  "browser": "art-direction/target/browser.png",
+  "desktop": "art-direction/target/desktop.png",
+  "play": "art-direction/target/play.png",
+  "icon": "art-direction/target/icon.png"
+ },
+ "saved": "2026-11-22T04:25:49+00:00"
+}

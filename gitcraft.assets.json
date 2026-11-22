@@ -1,0 +1,102 @@
+{
+ "assets": {
+  "assets/audio/ambience_forest.ogg": {
+   "format": "ogg",
+   "role": "ambience",
+   "sha256": "3c8c64675846966b704640e33b340fd3a0e40a9fa17065280753907bb4bdbb81",
+   "task": "audio.ambience.forest"
+  },
+  "assets/audio/ambience_wind.ogg": {
+   "format": "ogg",
+   "role": "ambience",
+   "sha256": "77d3a852c20362086a3fb006d7c9eb3daf02f229f5bd1c9d5bf53538f162a02f",
+   "task": "audio.ambience.wind"
+  },
+  "assets/audio/click.ogg": {
+   "format": "ogg",
+   "role": "sfx",
+   "sha256": "6b9fe415daaa43595cae057dc4383e05da47c37133a50abd93b7c66bade041e9",
+   "task": "audio.sfx.click"
+  },
+  "assets/audio/footstep.ogg": {
+   "format": "ogg",
+   "role": "sfx",
+   "sha256": "fc463ed591f46416e0133c866319366711e82a5d895c1803d418853eca3e70e9",
+   "task": "audio.sfx.footstep"
+  },
+  "assets/audio/thud.ogg": {
+   "format": "ogg",
+   "role": "sfx",
+   "sha256": "33bc5dd92cb78617601a2317626867ff82c2a41dd89cc265d64a8d5caf60ffbd",
+   "task": "audio.sfx.thud"
+  },
+  "assets/brand/logo.svg": {
+   "format": "svg",
+   "role": "logo",
+   "sha256": "4ee7c14740ad124e1b7d779c27ae1f362d45dae3649e61cb1dd6e2c62b5b41a1",
+   "task": "foundation.identity"
+  },
+  "assets/brand/palette.json": {
+   "format": "json",
+   "role": "palette",
+   "sha256": "c321975b0eef1898df5c7e8476554010762d79d8f9dd1baab905a341f879c140",
+   "task": "foundation.identity"
+  },
+  "assets/icons/apple-touch-icon.png": {
+   "format": "png",
+   "role": "icon",
+   "sha256": "6b61550160f2d9b32931a5880eb2561fdcccd7d27a08159561d3a175832aea95",
+   "task": "icon.derivatives"
+  },
+  "assets/icons/favicon-16.png": {
+   "format": "png",
+   "role": "favicon",
+   "sha256": "4794303296c13a22cfdbf3f30dd25e82063e87fb197924cd72406db331aeeb22",
+   "task": "icon.derivatives"
+  },
+  "assets/icons/favicon-32.png": {
+   "format": "png",
+   "role": "favicon",
+   "sha256": "4e1ea1c73cb50cc1f7fadecfdd5b9e8644f5a06b0ec4d6450f6ba340f08d01c3",
+   "task": "icon.derivatives"
+  },
+  "assets/icons/favicon.ico": {
+   "format": "ico",
+   "role": "favicon",
+   "sha256": "99a5595eaf46dc4f64a994ba50e669f74bc504a90c2526af0bdda01808c7d5ea",
+   "task": "icon.derivatives"
+  },
+  "assets/icons/icon-1024.png": {
+   "format": "png",
+   "role": "icon_master",
+   "sha256": "2cffe6e6cdb1fdd1d1cdd3126f0f4c7d034bf4088883d5c1fd13407351d78f75",
+   "task": "icon.derivatives"
+  },
+  "assets/icons/icon-192.png": {
+   "format": "png",
+   "role": "icon",
+   "sha256": "4b62aac842bdb6a541d7e30047e4667866b2aa136ad3590acc0f92caf9dc9da7",
+   "task": "icon.derivatives"
+  },
+  "assets/icons/icon-512.png": {
+   "format": "png",
+   "role": "icon",
+   "sha256": "e43d01fbdf9c8e181651621bf25feb38f6e4811e0a6f6782a4cccdf8b4be1e08",
+   "task": "icon.derivatives"
+  },
+  "assets/icons/icon-maskable-512.png": {
+   "format": "png",
+   "role": "icon",
+   "sha256": "b734ae5fd4a554c049e1c9d0edf3531f8197b9b06f00a43de3e3c0956f5eb1ef",
+   "task": "icon.derivatives"
+  },
+  "assets/icons/icon.svg": {
+   "format": "svg",
+   "role": "icon",
+   "sha256": "d87a1490317d816ed0216a64fbae8255539522022d9173564f55563e5b094c44",
+   "task": "icon.derivatives"
+  }
+ },
+ "owner": "integration",
+ "schema": "gitcraft-assets/1"
+}
