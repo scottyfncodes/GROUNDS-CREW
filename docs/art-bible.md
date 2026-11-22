@@ -60,6 +60,19 @@ are navy enamel plates with a brass inlay line. Display face Alfa Slab One (pain
 Barlow Condensed (scorecards and ticket stubs). Spacing 4/8/12/16/24. Touch targets 44 px or more. One sheet at
 a time; when one opens in portrait the park is re-framed above it so the field is never hidden.
 
+## Camera direction
+
+While nobody is steering, the director frames the work in progress: the active workers and where they are
+heading, at up to 2.4x the whole-park scale (capped on big screens). With the crew idle it drifts back to the whole
+park. One chip switches between Whole park and Follow the crew; a pan or pinch hands control to the player
+until a double-tap.
+
+## The cut
+
+Cut grass carries blade streaks laid along the direction the mower went (lanes, diagonals, arcs), so a stripe
+reads as mown, not painted. Where long grass meets a fresh cut the cut side is shaded and the long side's tips
+catch the light. Regrowth shows in proportion: grass at 70% looks 70%.
+
 ## Never
 
 A dashboard. Progress bars standing in for the work. Neon greens. Realistic tiny people. Hard 8-bit dithering.

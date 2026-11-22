@@ -56,7 +56,7 @@ export class Renderer {
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
     for (const w of act) { const ahead = [w.x + w.heading[0] * 34, w.y + w.heading[1] * 34]; for (const p of [[w.x, w.y], ahead]) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); } }
     const fast = 1 + 0.3 * Math.max(0, (this.speed || 1) - 1), padX = 80 * fast, padY = 64 * fast, bw = Math.max(250 * fast, x1 - x0 + padX * 2), bh = Math.max(200 * fast, y1 - y0 + padY * 2);
-    const avail = Math.max(160, this.vh - this.insets.top - this.insets.bottom), s = clamp(Math.min(this.vw / bw, avail / (bh * K)), this.home.s, this.home.s * 2.4);
+    const avail = Math.max(160, this.vh - this.insets.top - this.insets.bottom), s = clamp(Math.min(this.vw / bw, avail / (bh * K)), this.home.s, Math.max(this.home.s, Math.min(this.home.s * 2.4, 1.9)));   // close on a phone, never a wall of pixels on a big screen
     this.to = { x: clamp((x0 + x1) / 2, -215, 215), y: clamp((y0 + y1) / 2 + 6, -20, 360), s }; return true;
   }
   clearFx() { this.parts.length = this.sparks.length = this.sheens.length = this.floats.length = 0; this.routeFx = null; }

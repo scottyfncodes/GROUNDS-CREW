@@ -70,7 +70,11 @@ export class Surface {
   _mark(i0, j0, i1, j1) {
     i0 = Math.max(0, i0 - 2); j0 -= 2; i1 += 2; j1 += 2;   // neighbours too: the cut edge is drawn across them
     i0 = Math.max(0, i0); j0 = Math.max(0, j0); i1 = Math.min(GW - 1, i1); j1 = Math.min(GH - 1, j1); if (i1 < i0 || j1 < j0) return;
-    const d = this.dirty; if (!d) this.dirty = [i0, j0, i1, j1]; else { if (i0 < d[0]) d[0] = i0; if (j0 < d[1]) d[1] = j0; if (i1 > d[2]) d[2] = i1; if (j1 > d[3]) d[3] = j1; }
+    // separate regions for separate workers: merge only rectangles that touch, so three tools far apart never repaint the field between them
+    const list = this.dirty || (this.dirty = []);
+    for (const d of list) if (i0 <= d[2] + 8 && i1 >= d[0] - 8 && j0 <= d[3] + 8 && j1 >= d[1] - 8) { if (i0 < d[0]) d[0] = i0; if (j0 < d[1]) d[1] = j0; if (i1 > d[2]) d[2] = i1; if (j1 > d[3]) d[3] = j1; return; }
+    if (list.length >= 6) { const d = list[0]; d[0] = Math.min(d[0], i0); d[1] = Math.min(d[1], j0); d[2] = Math.max(d[2], i1); d[3] = Math.max(d[3], j1); return; }
+    list.push([i0, j0, i1, j1]);
   }
 
   // ---- tools -------------------------------------------------------------------------------------------
@@ -171,7 +175,11 @@ export class Surface {
   /** Repaint the texels that changed (or everything) and push them to the canvas. */
   flush(all) {
     if (!this.canvas) { this.dirty = null; return; }
-    const d = all ? [0, 0, GW - 1, GH - 1] : this.dirty; if (!d) return; this.dirty = null;
+    const rects = all ? [[0, 0, GW - 1, GH - 1]] : this.dirty; if (!rects) return; this.dirty = null;
+    for (const d of rects) this._shade(d);
+  }
+
+  _shade(d) {
     const [i0, j0, i1, j1] = d, D = this.img.data, { rg, n, lf, mf, lip, ring, rough, shade, scuff, chalk, chalkM, dir, bf } = this, isGrass = (k) => rg[k] >= RG.OUTFIELD && rg[k] <= RG.FOUL;
     for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
       const q = j * GW + i, r = rg[q], o = q * 4; if (!r) { D[o + 3] = 0; continue; }

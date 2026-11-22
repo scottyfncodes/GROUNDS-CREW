@@ -34,9 +34,13 @@ export class Sound {
     // a small room for the organ and the crowd
     this.verb = c.createConvolver(); this.verb.buffer = this._impulse(1.8); const vg = c.createGain(); vg.gain.value = 0.28; this.verb.connect(vg); vg.connect(this.master);
     const n = this.sr * 2, nb = c.createBuffer(1, n, this.sr), d = nb.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; this.noise = nb;
-    this.synth = { engine: this._engineBuf(), reel: this._reelBuf(), scrape: this._scrapeBuf(), crowd: this._crowdBuf(6, 1), cheer: this._crowdBuf(3.2, 2.4) };
     for (const k in FILES) this._load(k, FILES[k]);
-    this._organBus(); this._engine(); this._loopBuf('reel', this.synth.reel, 'highpass', 900); this._loopBuf('scrape', this.synth.scrape, 'bandpass', 1300); this._loopBuf('crowd', this.synth.crowd, 'lowpass', 2600, true);
+    this._organBus(); this.synth = {};
+    // build the synthesised loops one at a time after the tap, so the first tap answers at once
+    const jobs = [['engine', () => this._engineBuf(), () => this._engine()], ['reel', () => this._reelBuf(), () => this._loopBuf('reel', this.synth.reel, 'highpass', 900)], ['scrape', () => this._scrapeBuf(), () => this._loopBuf('scrape', this.synth.scrape, 'bandpass', 1300)],
+      ['crowd', () => this._crowdBuf(6, 1), () => this._loopBuf('crowd', this.synth.crowd, 'lowpass', 2600, true)], ['cheer', () => this._crowdBuf(3.2, 2.4), null]];
+    const next = () => { const j = jobs.shift(); if (!j) return; this.synth[j[0]] = j[1](); if (j[2]) j[2](); (window.requestIdleCallback || ((f) => setTimeout(f, 60)))(next); };
+    setTimeout(next, 120);
   }
   applyVolume() { if (this.master) this.master.gain.value = this.settings.muted ? 0 : this.settings.volume; }
   suspend(on) { if (this.ctx) (on ? this.ctx.suspend() : this.ctx.resume()).catch(() => {}); }
@@ -79,7 +83,7 @@ export class Sound {
   _organBus() { const c = this.ctx, inG = c.createGain(), dl = c.createDelay(0.05), lfo = c.createOscillator(), depth = c.createGain(), out = c.createGain(); dl.delayTime.value = 0.006; lfo.frequency.value = 5.6; depth.gain.value = 0.0018; lfo.connect(depth); depth.connect(dl.delayTime); lfo.start(); inG.connect(dl); inG.connect(out); dl.connect(out); out.gain.value = 0.6; out.connect(this.master); out.connect(this.verb); this.organIn = inG; }
 
   _set(loop, v, tc = 0.25) { const l = this.loops[loop]; if (l) l.g.gain.setTargetAtTime(v, this.ctx.currentTime, tc); }
-  play(name, gain = 0.5, rate = 1) { const c = this.ctx, b = c && (this.buf[name] || this.synth[name]); if (!b) return false; const s = c.createBufferSource(); s.buffer = b; s.playbackRate.value = rate; const g = c.createGain(); g.gain.value = gain; s.connect(g); g.connect(this.master); if (name === 'cheer') g.connect(this.verb); s.start(); return true; }
+  play(name, gain = 0.5, rate = 1) { const c = this.ctx, b = c && (this.buf[name] || (this.synth && this.synth[name])); if (!b) return false; const s = c.createBufferSource(); s.buffer = b; s.playbackRate.value = rate; const g = c.createGain(); g.gain.value = gain; s.connect(g); g.connect(this.master); if (name === 'cheer') g.connect(this.verb); s.start(); return true; }
   tone(freq, dur, gain = 0.1, type = 'sine', when = 0, attack = 0.008, dest) { const c = this.ctx; if (!c) return; const o = c.createOscillator(), g = c.createGain(), t = c.currentTime + when; o.type = type; o.frequency.value = freq; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(gain, t + attack); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); o.connect(g); g.connect(dest || this.master); o.start(t); o.stop(t + dur + 0.05); }
   burst(freq, dur, gain, when = 0, q = 1) { const c = this.ctx; if (!c) return; const s = c.createBufferSource(); s.buffer = this.noise; const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q; const g = c.createGain(), t = c.currentTime + when; g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); s.connect(f); f.connect(g); g.connect(this.master); s.start(t, Math.random()); s.stop(t + dur + 0.05); }
   /** One organ note: drawbars (sub, fundamental, fifth, octave, twelfth, fifteenth) with a percussive second harmonic on the attack. */

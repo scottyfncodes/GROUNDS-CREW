@@ -23,7 +23,9 @@ export class UI {
     $('summary').addEventListener('click', (e) => { if (e.target.closest('#next-day')) { g.sound.click(); g.nextDay(); } });
     addEventListener('keydown', (e) => { if (e.target.tagName === 'INPUT') return; const k = e.key;
       if (g.sim.mode === 'title' && (k === ' ' || k === 'Enter')) { e.preventDefault(); g.sound.unlock(); g.start(); return; }
-      if (k === 'Escape') this.close(); else if (k === ' ') { e.preventDefault(); g.togglePause(); } else if (k === '1' || k === '2' || k === '4') g.setSpeed(+k); else if (k === '0') g.renderer.reset(); });
+      if (k === 'Escape') this.close(); else if (k === ' ') { e.preventDefault(); g.togglePause(); } else if (k === '1' || k === '2' || k === '4') g.setSpeed(+k); else if (k === '0') g.renderer.reset();
+      else if (g.sim.mode === 'day' && !e.target.closest('button, a')) { const kk = k.toLowerCase(); if (k === 'Enter' || kk === 't') this.toggle('tasks'); else if (kk === 'c') this.toggle('crew'); else if (kk === 's') this.toggle('shop'); else if (kk === 'g') this.gates(); }
+      else if (g.sim.mode === 'summary' && k === 'Enter') g.nextDay(); else if (g.sim.mode === 'gameday' && k === 'Enter') g.skipGame(); });
   }
 
   // ---- sheets ------------------------------------------------------------------------------------------
@@ -73,7 +75,7 @@ export class UI {
       h += `<div class="set"><span>Camera</span><button class="opt" type="button" data-act="recenter">Whole park</button></div><div class="set"><span>Progress</span><button class="opt" type="button" data-act="${c.confirm ? 'reset-yes' : 'reset'}">${c.confirm ? 'Yes, start over' : 'Start over'}</button></div>`;
       if (c.confirm) h += `<p class="why">This clears your days, bucks, upgrades and the field. Tap again to confirm.</p>`;
       if (this.game.logo) h += `<div class="logo" role="img" aria-label="GROUNDS CREW, Cloverfield Park">${this.game.logo}</div>`;
-      h += `<p class="about">Tap the field or a groundskeeper. Drag to look around, pinch to zoom, double-tap to see the whole park.<br><span class="haveanapp-byline" data-haveanapp>GROUNDS CREW <a class="haveanapp-byline__by" href="https://haveanapp.com" rel="noopener" target="_blank">by HaveAnApp</a></span></p>`;
+      h += `<p class="about">Tap the field or a groundskeeper. Drag to look around, pinch to zoom, double-tap to see the whole park. Keys: Enter or T tasks, C crew, S shop, G gates, Space pause, 1/2/4 speed.<br><span class="haveanapp-byline" data-haveanapp>GROUNDS CREW <a class="haveanapp-byline__by" href="https://haveanapp.com" rel="noopener" target="_blank">by HaveAnApp</a></span></p>`;
     } else if (this.kind === 'unfinished') {
       const pct = Math.round(c.check.field * 100); h += this.head('Open the gates?', c.check.busy ? 'The crew is still out there.' : `The field is at ${pct}%.`);
       h += `<p class="sub">${c.check.busy ? 'They will put their gear away and clear the field first. ' : ''}${pct < 90 ? 'A rougher field means a smaller craftsmanship bonus, nothing worse.' : 'Looks ready.'}</p><div class="actions"><button class="enamel enamel--quiet" type="button" data-act="close">Keep working</button><button class="enamel" type="button" data-act="gates-yes">Open them</button></div>`;
