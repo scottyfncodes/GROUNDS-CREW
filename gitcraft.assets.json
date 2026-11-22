@@ -95,6 +95,48 @@
    "role": "icon",
    "sha256": "d87a1490317d816ed0216a64fbae8255539522022d9173564f55563e5b094c44",
    "task": "icon.derivatives"
+  },
+  "assets/audio/ambience_forest.mp3": {
+   "format": "mp3",
+   "role": "ambience",
+   "sha256": "a70951a32b127c32cdaa845e870a26c9ef26b7ed5543dbdaaab75c7bdcb36b6b",
+   "task": "v0.2 audio pass (audiocraft convert/ambience)"
+  },
+  "assets/audio/ambience_wind.mp3": {
+   "format": "mp3",
+   "role": "ambience",
+   "sha256": "eb5a49e02f6b361f21e99124a3a55d140ac37302cd4237f8551199dae81023a6",
+   "task": "v0.2 audio pass (audiocraft convert/ambience)"
+  },
+  "assets/audio/click.mp3": {
+   "format": "mp3",
+   "role": "sfx",
+   "sha256": "ba61738a00cce50c4f47c89f02a11f2f3c2aff686e139dcfce2068f384767d69",
+   "task": "v0.2 audio pass (audiocraft convert/ambience)"
+  },
+  "assets/audio/footstep.mp3": {
+   "format": "mp3",
+   "role": "sfx",
+   "sha256": "caf75aeab90f74204578214c8b980099c5626e68057c75cffff661902371b3f6",
+   "task": "v0.2 audio pass (audiocraft convert/ambience)"
+  },
+  "assets/audio/thud.mp3": {
+   "format": "mp3",
+   "role": "sfx",
+   "sha256": "b1ffba5a81f5f8ee720a8c0d83ab5b4e54475b446b22eab91a18681dc49aeb2f",
+   "task": "v0.2 audio pass (audiocraft convert/ambience)"
+  },
+  "assets/audio/ambience_neighbourhood.mp3": {
+   "format": "mp3",
+   "role": "ambience",
+   "sha256": "3f0893eb4c549a616539bff6d107b17e883f1114f4387a379edaa7b3aa6ef635",
+   "task": "v0.2 audio pass (audiocraft convert/ambience)"
+  },
+  "assets/audio/ambience_neighbourhood.ogg": {
+   "format": "ogg",
+   "role": "ambience",
+   "sha256": "91061ddfe7ea042ae1334cd8783a446b6c96d41e366a65c281a9b945610654c6",
+   "task": "v0.2 audio pass (audiocraft convert/ambience)"
   }
  },
  "owner": "integration",

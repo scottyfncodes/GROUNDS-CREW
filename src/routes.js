@@ -30,6 +30,22 @@ function lanePass(inArea, dir, W, pass, from) {
   return best || [];
 }
 
+/** Fan arcs: concentric lanes around home plate, swept foul line to foul line, alternating direction, inside out. */
+function arcPass(inArea, W, from) {
+  const lanes = [];
+  for (let k = 1; k < 30; k++) { const r = (k + 0.5) * W, n = Math.max(8, Math.ceil((r * Math.PI / 2) / 5)), runs = []; let cur = null;
+    for (let i = 0; i <= n; i++) { const a = -Math.PI / 4 + (i / n) * Math.PI / 2, ok = [-0.34, 0, 0.34].some((o) => inArea(Math.sin(a) * (r + o * W), Math.cos(a) * (r + o * W)));
+      if (ok && i < n) (cur || (cur = [])).push(a); else if (cur) { if (cur.length > 1) runs.push(cur); cur = null; } }
+    if (runs.length) lanes.push({ k, r, runs }); }
+  const segs = []; let fwd = true;
+  if (lanes.length && from[0] > 0) fwd = false;
+  for (const lane of lanes) { const runs = fwd ? lane.runs : [...lane.runs].reverse().map((r) => [...r].reverse());
+    runs.forEach((run, ri) => { const pts = run.map((a) => [Math.sin(a) * lane.r, Math.cos(a) * lane.r]);
+      for (let i = 0; i < pts.length - 1; i++) segs.push({ a: pts[i], b: pts[i + 1], work: true, arc: { k: lane.k }, W, pass: 1, endOfLane: ri === runs.length - 1 && i === pts.length - 2, lane: i === pts.length - 2 ? pts : null }); });
+    fwd = !fwd; }
+  return segs;
+}
+
 function link(segs) {
   const out = [];
   segs.forEach((s, i) => { if (i && dist(segs[i - 1].b, s.a) > 0.5) out.push({ a: segs[i - 1].b, b: s.a, work: false }); out.push(s); });
@@ -43,6 +59,8 @@ export function mowRoute(areaKey, pattern, W, from = NAV.gateIn) {
     const L = lanePass((x, y) => x < 0 && areaAt(x, y) === 'foul', [-S2, S2], W, 1, from);
     const R = lanePass((x, y) => x >= 0 && areaAt(x, y) === 'foul', [S2, S2], W, 1, L.length ? L[L.length - 1].b : from);
     segs = L.concat(R); const pl = lane([-S2, S2]), pr = lane([S2, S2]); parityAt = (x, y) => (x < 0 ? pl(x, y) : pr(x, y));
+  } else if (pattern === 'arcs') {
+    segs = arcPass((x, y) => areaAt(x, y) === areaKey, W, from); parityAt = (x, y) => Math.floor(Math.hypot(x, y) / W) & 1;
   } else {
     const dirs = PATTERN_DIRS[pattern] || PATTERN_DIRS.classic, inArea = (x, y) => areaAt(x, y) === areaKey;
     dirs.forEach((d, n) => { segs = segs.concat(lanePass(inArea, d, W, n + 1, segs.length ? segs[segs.length - 1].b : from)); });
@@ -84,5 +102,6 @@ export const routeLength = (segs) => segs.reduce((n, s) => n + dist(s.a, s.b), 0
 export function patternParity(areaKey, pattern, W) {
   const lane = (dir) => (x, y) => Math.floor((x * -dir[1] + y * dir[0]) / W) & 1;
   if (areaKey === 'foul') { const pl = lane([-S2, S2]), pr = lane([S2, S2]); return (x, y) => (x < 0 ? pl(x, y) : pr(x, y)); }
+  if (pattern === 'arcs') return (x, y) => Math.floor(Math.hypot(x, y) / W) & 1;
   const dirs = PATTERN_DIRS[pattern] || PATTERN_DIRS.classic, p1 = lane(dirs[0]), p2 = dirs[1] ? lane(dirs[1]) : null; return p2 ? (x, y) => p1(x, y) ^ p2(x, y) : p1;
 }

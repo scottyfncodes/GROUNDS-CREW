@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>GROUNDS CREW · Cloverfield Park</title>
   <meta name="description" content="GROUNDS CREW by HaveAnApp: look after a little ballpark. Send a tiny grounds crew to mow, drag and chalk Cloverfield Park, then open the gates.">
   <meta name="author" content="HaveAnApp">
@@ -25,6 +25,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body data-mode="loading">
+  <main id="park">
   <canvas id="game" aria-label="Cloverfield Park, seen from above. Tap the field to give the crew a job." role="img" tabindex="0"></canvas>
 
   <header class="top" id="top" aria-label="Status">
@@ -38,6 +39,9 @@
       <button class="icon" id="settings" type="button" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 2h4l.6 3 2.5 1.4 2.9-1 2 3.4-2.3 2v2.4l2.3 2-2 3.4-2.9-1-2.5 1.4-.6 3h-4l-.6-3-2.5-1.4-2.9 1-2-3.4 2.3-2v-2.4l-2.3-2 2-3.4 2.9 1L9.400 5z M12 8.500a3.500 3.500 0 100 7 3.500 3.500 0 000-7z" fill-rule="evenodd"/></svg></button>
     </div>
   </header>
+
+
+  <button class="today" id="today" type="button" hidden></button>
 
   <section class="title" id="title" aria-label="Title">
     <div class="sign"><small>CLOVERFIELD PARK · EST. 1948</small><h1>GROUNDS CREW</h1><i aria-hidden="true"></i></div>
@@ -54,6 +58,8 @@
 
   <section class="sheet" id="sheet" aria-live="polite" hidden></section>
 
+  </main>
+
   <nav class="bar" id="bar" aria-label="Controls">
     <button class="tab" id="tab-crew" type="button">Crew</button>
     <button class="tab" id="tab-tasks" type="button">Tasks</button>
@@ -61,11 +67,12 @@
     <button class="tab tab--speed" id="speed" type="button" aria-label="Game speed">1×</button>
     <button class="enamel enamel--bar" id="open-gates" type="button">Open gates</button>
   </nav>
+  <aside aria-label="Messages">
   <button class="enamel enamel--skip" id="skip" type="button" hidden>Skip to the final</button>
-
   <section class="summary" id="summary" aria-label="Day summary" hidden></section>
   <p class="toast" id="toast" role="status" hidden></p>
   <p class="error" id="error" role="alert" hidden></p>
+  </aside>
   <noscript><p class="error">GROUNDS CREW needs JavaScript to run.</p></noscript>
   <script type="module" src="src/main.js"></script>
 </body>

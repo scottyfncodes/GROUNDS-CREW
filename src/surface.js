@@ -18,6 +18,8 @@ const C = {
   clay: hex(PAL.terracotta), groom: hex(PAL.groomedEarth), deep: hex(PAL.richClay), scuff: hex(PAL.scuffDark), track: hex(PAL.dustyCinnamon), chalk: hex(PAL.chalkWhite),
 };
 
+/** Which way a mower lane runs: 1 up and down the field, 2 across it, 3 and 4 the diagonals. */
+export const axisOf = (d) => (Math.abs(d[1]) > 0.9 ? 1 : Math.abs(d[0]) > 0.9 ? 2 : d[0] * d[1] > 0 ? 3 : 4);
 export const gx = (x) => Math.floor((x - BOUNDS.x0) * RES);
 export const gy = (y) => Math.floor((BOUNDS.y1 - y) * RES);
 export const wx = (i) => BOUNDS.x0 + (i + 0.5) / RES;
@@ -30,6 +32,8 @@ export class Surface {
     this.rg = new Uint8Array(N); this.area = new Uint8Array(N);
     this.n = new Uint8Array(N); this.lf = new Uint8Array(N); this.mf = new Uint8Array(N); this.lip = new Int8Array(N); this.ring = new Uint8Array(N); this.chalkM = new Uint8Array(N);
     this.rough = new Uint8Array(N);   // grass: 0 fresh cut .. 255 shaggy
+    this.dir = new Uint8Array(N);     // grass: which way it was last cut (0 never, 1 up/down, 2 across, 3 and 4 diagonals, 5 arcs)
+    this.bf = new Uint8Array(N);      // grass: blade clumps, the texture of long grass
     this.shade = new Uint8Array(N);   // grass: bit0 light/dark band, bit1 crossed in the current second pass
     this.scuff = new Uint8Array(N);   // dirt: 0 groomed .. 255 torn up
     this.chalk = new Uint8Array(N);   // chalk: 0 none .. 255 fresh
@@ -43,7 +47,7 @@ export class Surface {
     const { rg, area, n, lf, mf, lip, ring } = this;
     for (let j = 0; j < GH; j++) { const y = wy(j); for (let i = 0; i < GW; i++) {
       const x = wx(i), k = j * GW + i, r = region(x, y); rg[k] = r; area[k] = areaIdOf(r);
-      n[k] = hash2(i, j) * 255; lf[k] = vnoise(x / 38, y / 38, 7) * 255; mf[k] = vnoise(x / 6.5, y / 6.5, 3) * 255;
+      n[k] = hash2(i, j) * 255; lf[k] = vnoise(x / 38, y / 38, 7) * 255; mf[k] = vnoise(x / 6.5, y / 6.5, 3) * 255; if (r && r <= RG.FOUL) this.bf[k] = (vnoise(x / 1.4, y / 2.1, 5) * 0.75 + vnoise(x / 0.6, y / 0.9, 6) * 0.25) * 255;
       if (r === RG.SKIN) ring[k] = Math.floor(Math.hypot(x - MOUND[0], y - MOUND[1]) / 2.4) & 1;
       else if (r === RG.MOUND) ring[k] = Math.floor(Math.hypot(x - MOUND[0], y - MOUND[1]) / 1.8) & 1;
       else if (r === RG.PLATE) ring[k] = Math.floor(Math.hypot(x, y) / 1.8) & 1;
@@ -64,8 +68,13 @@ export class Surface {
   }
 
   _mark(i0, j0, i1, j1) {
+    i0 = Math.max(0, i0 - 2); j0 -= 2; i1 += 2; j1 += 2;   // neighbours too: the cut edge is drawn across them
     i0 = Math.max(0, i0); j0 = Math.max(0, j0); i1 = Math.min(GW - 1, i1); j1 = Math.min(GH - 1, j1); if (i1 < i0 || j1 < j0) return;
-    const d = this.dirty; if (!d) this.dirty = [i0, j0, i1, j1]; else { if (i0 < d[0]) d[0] = i0; if (j0 < d[1]) d[1] = j0; if (i1 > d[2]) d[2] = i1; if (j1 > d[3]) d[3] = j1; }
+    // separate regions for separate workers: merge only rectangles that touch, so three tools far apart never repaint the field between them
+    const list = this.dirty || (this.dirty = []);
+    for (const d of list) if (i0 <= d[2] + 8 && i1 >= d[0] - 8 && j0 <= d[3] + 8 && j1 >= d[1] - 8) { if (i0 < d[0]) d[0] = i0; if (j0 < d[1]) d[1] = j0; if (i1 > d[2]) d[2] = i1; if (j1 > d[3]) d[3] = j1; return; }
+    if (list.length >= 6) { const d = list[0]; d[0] = Math.min(d[0], i0); d[1] = Math.min(d[1], j0); d[2] = Math.max(d[2], i1); d[3] = Math.max(d[3], j1); return; }
+    list.push([i0, j0, i1, j1]);
   }
 
   // ---- tools -------------------------------------------------------------------------------------------
@@ -73,16 +82,26 @@ export class Surface {
   /** Cut one mower pass: texels of `areaId` inside lane k (width W, travel direction dir) between v0 and v1 along it. */
   cutLane(areaId, dir, W, k, v0, v1, pass) {
     if (v1 < v0) { const t = v0; v0 = v1; v1 = t; }
-    const dx = dir[0], dy = dir[1], px = -dy, py = dx, u0 = k * W, u1 = u0 + W, par = k & 1, { area, rough, shade } = this;
+    const dx = dir[0], dy = dir[1], px = -dy, py = dx, u0 = k * W, u1 = u0 + W, par = k & 1, { area, rough, shade } = this, axis = axisOf(dir);
     const xs = [u0 * px + v0 * dx, u1 * px + v0 * dx, u0 * px + v1 * dx, u1 * px + v1 * dx], ys = [u0 * py + v0 * dy, u1 * py + v0 * dy, u0 * py + v1 * dy, u1 * py + v1 * dy];
     const i0 = Math.max(0, gx(Math.min(...xs)) - 1), i1 = Math.min(GW - 1, gx(Math.max(...xs)) + 1), j0 = Math.max(0, gy(Math.max(...ys)) - 1), j1 = Math.min(GH - 1, gy(Math.min(...ys)) + 1);
     let cut = 0;
     for (let j = j0; j <= j1; j++) { const y = wy(j); for (let i = i0; i <= i1; i++) { const q = j * GW + i; if (area[q] !== areaId) continue; const x = wx(i), u = x * px + y * py, v = x * dx + y * dy;
       if (u < u0 || u >= u1 || v < v0 || v > v1) continue;
       if (pass === 2) { if (shade[q] & 2) continue; shade[q] = (shade[q] ^ par) | 2; } else shade[q] = par;
-      rough[q] = 0; cut++; } }
+      rough[q] = 0; this.dir[q] = axis; cut++; } }
     if (cut) this._mark(i0, j0, i1, j1);
     return cut;
+  }
+  /** Cut part of an arc lane: texels at distance [kW, (k+1)W) from home plate between angles a0 and a1 (radians from the centre-field line). */
+  cutArc(areaId, W, k, a0, a1) {
+    if (a1 < a0) { const t = a0; a0 = a1; a1 = t; }
+    const r0 = k * W, r1 = r0 + W, { area, rough, shade, dir } = this, xs = [], ys = [];
+    for (const r of [r0, r1]) for (const a of [a0, a1, (a0 + a1) / 2]) { xs.push(Math.sin(a) * r); ys.push(Math.cos(a) * r); }
+    const i0 = Math.max(0, gx(Math.min(...xs)) - 2), i1 = Math.min(GW - 1, gx(Math.max(...xs)) + 2), j0 = Math.max(0, gy(Math.max(...ys)) - 2), j1 = Math.min(GH - 1, gy(Math.min(...ys)) + 2); let cut = 0;
+    for (let j = j0; j <= j1; j++) { const y = wy(j); for (let i = i0; i <= i1; i++) { const q = j * GW + i; if (area[q] !== areaId) continue; const x = wx(i), r = Math.hypot(x, y);
+      if (r < r0 || r >= r1) continue; const a = Math.atan2(x, y); if (a < a0 || a > a1) continue; shade[q] = k & 1; rough[q] = 0; dir[q] = 5; cut++; } }
+    if (cut) this._mark(i0, j0, i1, j1); return cut;
   }
   /** Before a crossing pass: forget which texels the last one crossed. */
   beginSecondPass(areaId) { const { area, shade } = this; for (let q = 0; q < area.length; q++) if (area[q] === areaId) shade[q] &= 1; }
@@ -131,17 +150,17 @@ export class Surface {
   initWorn(seed) {
     const { rg, area, rough, shade, scuff, chalk, chalkM, lf, mf } = this;
     for (let j = 0; j < GH; j++) for (let i = 0; i < GW; i++) { const q = j * GW + i, a = area[q]; if (chalkM[q]) chalk[q] = 46 + hash2(i, j, seed) * 60;
-      if (!a) continue; if (a <= 3) { rough[q] = 172 + lf[q] * 0.3; shade[q] = Math.floor((wx(i) + 1000) / 24) & 1; } else scuff[q] = 185 + mf[q] * 0.27; }
+      if (!a) continue; if (a <= 3) { rough[q] = 172 + lf[q] * 0.3; shade[q] = Math.floor((wx(i) + 1000) / 24) & 1; this.dir[q] = 1; } else scuff[q] = 185 + mf[q] * 0.27; }
     this._spots(seed, 1); this._mark(0, 0, GW - 1, GH - 1);
   }
   /** The morning after a game: growth everywhere, wear where people stood and ran, faded chalk. Never a reset. */
-  wear(seed, day) {
+  wear(seed, day, rain = false) {
     const { area, rough, scuff, chalk, chalkM, mf } = this, s = seed + day * 101;
     for (let j = 0; j < GH; j++) { const y = wy(j); for (let i = 0; i < GW; i++) { const q = j * GW + i, a = area[q];
       if (chalkM[q]) { const x = wx(i); chalk[q] = chalk[q] * (Math.hypot(x, y) < 22 ? 0.12 : 0.28 + 0.3 * vnoise(x / 20, y / 20, s)); }
       if (!a) continue; const x = wx(i);
       if (a <= 3) rough[q] = Math.min(255, rough[q] + 58 + vnoise(x / 30, y / 30, s) * 46);
-      else { const lane = Math.abs(Math.abs(x) - y) * 0.7071 < 4 && y < BASE + 6 ? 90 : 0; scuff[q] = Math.min(255, scuff[q] + 105 + mf[q] * 0.3 + vnoise(x / 9, y / 9, s) * 60 + lane); } } }
+      else { const lane = Math.abs(Math.abs(x) - y) * 0.7071 < 4 && y < BASE + 6 ? 90 : 0; scuff[q] = Math.min(255, scuff[q] + 105 + mf[q] * 0.3 + vnoise(x / 9, y / 9, s) * 60 + lane + (rain ? 80 : 0)); } } }
     this._spots(s, 0.8); this._mark(0, 0, GW - 1, GH - 1);
   }
   _spots(seed, k) {                                                       // worn patches where fielders stand
@@ -156,20 +175,33 @@ export class Surface {
   /** Repaint the texels that changed (or everything) and push them to the canvas. */
   flush(all) {
     if (!this.canvas) { this.dirty = null; return; }
-    const d = all ? [0, 0, GW - 1, GH - 1] : this.dirty; if (!d) return; this.dirty = null;
-    const [i0, j0, i1, j1] = d, D = this.img.data, { rg, n, lf, mf, lip, ring, rough, shade, scuff, chalk, chalkM } = this;
+    const rects = all ? [[0, 0, GW - 1, GH - 1]] : this.dirty; if (!rects) return; this.dirty = null;
+    for (const d of rects) this._shade(d);
+  }
+
+  _shade(d) {
+    const [i0, j0, i1, j1] = d, D = this.img.data, { rg, n, lf, mf, lip, ring, rough, shade, scuff, chalk, chalkM, dir, bf } = this, isGrass = (k) => rg[k] >= RG.OUTFIELD && rg[k] <= RG.FOUL;
     for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
       const q = j * GW + i, r = rg[q], o = q * 4; if (!r) { D[o + 3] = 0; continue; }
       const nn = n[q] / 255 - 0.5, l = lf[q] / 255 - 0.5, m = mf[q] / 255; let R, G, B;
       if (r <= RG.FOUL) {
-        const ro = rough[q] / 255, cut = (shade[q] & 1) ? C.light : C.dark, w = ro * ro * (3 - 2 * ro);            // shaggy weight
-        const dry = ro > 0.84 ? (ro - 0.84) * 3.4 : 0;
-        const sr = C.olive[0] + (C.shadow[0] - C.olive[0]) * (0.5 - l) * 0.9 + (C.dry[0] - C.olive[0]) * dry, sg = C.olive[1] + (C.shadow[1] - C.olive[1]) * (0.5 - l) * 0.9 + (C.dry[1] - C.olive[1]) * dry, sb = C.olive[2] + (C.shadow[2] - C.olive[2]) * (0.5 - l) * 0.9 + (C.dry[2] - C.olive[2]) * dry;
-        // old stripes still ghost through long grass, a little
-        const keep = 0.16 * w, gr = sr + (cut[0] - sr) * keep, gg = sg + (cut[1] - sg) * keep, gb = sb + (cut[2] - sb) * keep;
+        const ro = rough[q] / 255, cut = (shade[q] & 1) ? C.light : C.dark, w = Math.min(1, ro * 1.3);              // how long it is, as you see it: linear, so 30% grown looks 30% grown
+        const dry = ro > 0.86 ? (ro - 0.86) * 3 : 0, b = bf[q] / 255 - 0.5, deep = 0.5 - l * 1.2 + b * 0.5;
+        // long grass: a lush, clumpy green that deepens in the hollows; dries a little only when it is very long
+        const sr = C.olive[0] + (C.shadow[0] - C.olive[0]) * deep + (C.dry[0] - C.olive[0]) * dry, sg = C.olive[1] + (C.shadow[1] - C.olive[1]) * deep + (C.dry[1] - C.olive[1]) * dry, sb = C.olive[2] + (C.shadow[2] - C.olive[2]) * deep + (C.dry[2] - C.olive[2]) * dry;
+        const keep = 0.14 * w, gr = sr + (cut[0] - sr) * keep, gg = sg + (cut[1] - sg) * keep, gb = sb + (cut[2] - sb) * keep;        // old stripes ghost through
         R = cut[0] + (gr - cut[0]) * w; G = cut[1] + (gg - cut[1]) * w; B = cut[2] + (gb - cut[2]) * w;
-        const tuft = w * ((nn > 0.36 ? -26 : nn < -0.4 ? 16 : nn * 14) + (m - 0.5) * 30) + (1 - w) * (nn * 9 + l * 12 + ((j & 1) ? 1.5 : -1.5));
-        R += tuft; G += tuft; B += tuft * 0.6;
+        // cut grass: fine blade streaks laid the way the mower went
+        let streak = 0; const ax = dir[q];
+        if (ax && w < 0.95) { const x = wx(i), y = wy(j); let u, v;
+          if (ax === 1) { u = x; v = y; } else if (ax === 2) { u = y; v = x; } else if (ax === 3) { u = (x - y) * 0.7071; v = (x + y) * 0.7071; } else if (ax === 4) { u = (x + y) * 0.7071; v = (x - y) * 0.7071; } else { u = Math.hypot(x, y); v = Math.atan2(x, y) * u; }
+          const ui = Math.floor(u * 1.35); streak = (hash2(ui, Math.floor(v / 9 + hash2(ui, 3, 4) * 3), 9) - 0.5) * 15 + (hash2(ui, 7, 2) - 0.5) * 7; }
+        const tuft = w * (b * 40 + (m - 0.5) * 22 + nn * 5) + (1 - w) * (streak + nn * 4 + l * 9);
+        R += tuft; G += tuft; B += tuft * 0.55;
+        // the cut edge: long grass leans over fresh cut and shades it; its own tips catch the light
+        if (q > GW && q < rg.length - GW) { const tall = (k) => isGrass(k) && rough[k] > 150, short = (k) => isGrass(k) && rough[k] < 70;
+          if (ro < 0.27 && (tall(q - GW) || tall(q - 1) || tall(q + 1))) { R -= 20; G -= 18; B -= 12; }
+          else if (ro > 0.59 && (short(q + GW) || short(q - 1) || short(q + 1))) { R += 9; G += 11; B += 4; } }
       } else if (r === RG.TRACK) { const s = nn * 16 + l * 16; R = C.track[0] + s; G = C.track[1] + s; B = C.track[2] + s; }
       else {
         const sc = scuff[q] / 255, rgm = ring[q] ? 0 : 0.2, fr = C.groom[0] + (C.clay[0] - C.groom[0]) * rgm, fg = C.groom[1] + (C.clay[1] - C.groom[1]) * rgm, fb = C.groom[2] + (C.clay[2] - C.groom[2]) * rgm;
@@ -191,13 +223,13 @@ export class Surface {
     const pick = (i, j, ok) => { for (let dj = 0; dj < 4; dj++) for (let di = 0; di < 4; di++) { const q = ((j << 2) + dj) * GW + (i << 2) + di; if (ok(q)) return q; } return -1; };
     const pack = (ok, val) => { const bytes = []; let prev = -1, run = 0; for (let j = 0; j < bh; j++) for (let i = 0; i < bw; i++) { const q = pick(i, j, ok), v = q < 0 ? 0 : val(q); if (v === prev && run < 255) run++; else { if (run) bytes.push(run, prev); prev = v; run = 1; } } bytes.push(run, prev);
       let str = ''; for (let k = 0; k < bytes.length; k += 4096) str += String.fromCharCode.apply(null, bytes.slice(k, k + 4096)); return btoa(str); };
-    return { g: pack((q) => area[q] >= 1 && area[q] <= 3, (q) => ((this.rough[q] >> 3) << 1) | (this.shade[q] & 1)), d: pack((q) => area[q] >= 4, (q) => this.scuff[q] >> 3), c: pack((q) => chalkM[q] === 1, (q) => this.chalk[q] >> 3) };
+    return { a: pack((q) => area[q] >= 1 && area[q] <= 3, (q) => this.dir[q]), g: pack((q) => area[q] >= 1 && area[q] <= 3, (q) => ((this.rough[q] >> 3) << 1) | (this.shade[q] & 1)), d: pack((q) => area[q] >= 4, (q) => this.scuff[q] >> 3), c: pack((q) => chalkM[q] === 1, (q) => this.chalk[q] >> 3) };
   }
   deserialize(o) {
     const bw = GW >> 2, bh = GH >> 2, un = (s) => { const b = atob(s), out = new Uint8Array(bw * bh); let p = 0; for (let k = 0; k + 1 < b.length; k += 2) { const run = b.charCodeAt(k), v = b.charCodeAt(k + 1); out.fill(v, p, p + run); p += run; } if (p !== bw * bh) throw new Error('field data is the wrong size'); return out; };
-    const g = un(o.g), d = un(o.d), c = un(o.c), up = (v) => (v >= 31 ? 255 : v << 3);
+    const g = un(o.g), d = un(o.d), c = un(o.c), ax = o.a ? un(o.a) : null, up = (v) => (v >= 31 ? 255 : v << 3);
     for (let j = 0; j < GH; j++) for (let i = 0; i < GW; i++) { const q = j * GW + i, b = (j >> 2) * bw + (i >> 2), a = this.area[q];
-      if (a && a <= 3) { this.rough[q] = up(g[b] >> 1); this.shade[q] = g[b] & 1; } else if (a) this.scuff[q] = up(d[b]); if (this.chalkM[q]) this.chalk[q] = up(c[b]); }
+      if (a && a <= 3) { this.rough[q] = up(g[b] >> 1); this.shade[q] = g[b] & 1; this.dir[q] = ax ? Math.min(5, ax[b]) : this.rough[q] < 128 ? 1 : 0; } else if (a) this.scuff[q] = up(d[b]); if (this.chalkM[q]) this.chalk[q] = up(c[b]); }
     this._mark(0, 0, GW - 1, GH - 1);
   }
 }

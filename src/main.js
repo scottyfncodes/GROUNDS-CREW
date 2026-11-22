@@ -18,13 +18,13 @@ function boot() {
   const canvas = document.getElementById('game');
   const surface = new Surface((w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; });
   const game = { settings: loadSettings(), speed: 1, paused: false, saveT: 0 };
-  const sim = game.sim = new Sim(surface, (type, data) => { game.renderer && game.renderer.on(type, data); game.sound.on(type, data); game.director && game.director(type, data); if (type === 'jobdone' || type === 'buy' || type === 'newday' || type === 'summary') game.saveSoon(); });
+  const sim = game.sim = new Sim(surface, (type, data) => { game.renderer && game.renderer.on(type, data); game.sound.on(type, data); game.director && game.director(type, data); if ((type === 'jobdone' || (type === 'stripe' && data.first) || type === 'buy') && navigator.vibrate) try { navigator.vibrate(12); } catch { /* not supported */ } if (type === 'jobdone' || type === 'buy' || type === 'newday' || type === 'summary') game.saveSoon(); });
   game.sound = new Sound(game.settings);
   const saved = loadSave(); let restored = false;
   if (saved.data) { try { sim.fromSave(saved.data); restored = true; } catch (err) { saved.error = err; clearSave(); } }
   if (!restored) { surface.initWorn(sim.seed); sim.refresh(); }
   surface.flush(true);
-  const r = game.renderer = new Renderer(canvas, sim, surface);
+  const r = game.renderer = new Renderer(canvas, sim, surface); r.director = game.settings.director !== false;
   const ui = game.ui = new UI(game);
 
   const insets = () => { const land = innerWidth > innerHeight, sat = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sat')) || 0, rect = (sel) => { const el = document.querySelector(sel); return el && !el.hidden ? el.getBoundingClientRect() : null; };
@@ -38,17 +38,18 @@ function boot() {
   game.reframe = () => r.frame(insets());
   addEventListener('resize', layout); addEventListener('orientationchange', () => setTimeout(layout, 120)); if (window.visualViewport) visualViewport.addEventListener('resize', layout);
 
-  game.start = () => { if (sim.mode !== 'title') return; sim.start(); document.body.dataset.mode = 'day'; r.userMoved = false; r.frame(insets()); if (restored && sim.day > 1) ui.toast(`Welcome back. Day ${sim.day}.`); };
+  game.start = () => { if (sim.mode !== 'title') return; sim.start(); document.body.dataset.mode = 'day'; r.userMoved = false; r.frame(insets()); if (sim.day > 1) ui.showCard(); };
   game.setSpeed = (n) => { game.speed = n; game.paused = false; };
   game.cycleSpeed = () => { game.speed = game.speed === 1 ? 2 : game.speed === 2 ? 4 : 1; game.paused = false; };
   game.togglePause = () => { if (sim.mode === 'title' || sim.mode === 'summary') return; game.paused = !game.paused; };
   game.setVolume = (v) => { game.settings.volume = v; game.sound.applyVolume(); writeSettings(game.settings); };
+  game.setDirector = (on) => { game.settings.director = on; r.director = on; r.userMoved = false; r.follow = null; if (!on) r.to = { ...r.home }; writeSettings(game.settings); };
   game.setMuted = (m) => { game.settings.muted = m; game.sound.applyVolume(); writeSettings(game.settings); };
   game.save = () => { if (sim.mode === 'title' && !restored) return; writeSave(sim.toSave()); game.saveT = 0; };
   game.saveSoon = () => { game.saveT = Math.max(game.saveT, 19.2); };
   game.openGates = () => { r.reset(); sim.openGates(); game.paused = false; };
   game.skipGame = () => { if (sim.gameday) sim.gameday.skip(); };
-  game.nextDay = () => { sim.nextDay(); game.speed = 1; r.reset(); game.save(); };
+  game.nextDay = () => { sim.nextDay(); game.speed = 1; r.reset(); r.walkers.length = 0; game.save(); ui.showCard(); };
   game.resetProgress = () => { clearSave(); location.reload(); };
 
   /** A tap on the world: a groundskeeper first, then whatever part of the field is under the finger. */
@@ -83,7 +84,7 @@ function boot() {
     const dt = Math.min(0.1, Math.max(0, (now - last) / 1000)); last = now;
     const running = sim.mode !== 'title' && sim.mode !== 'summary' && !game.paused, simDt = running ? dt * game.speed : 0;
     acc += simDt; let n = Math.floor(acc / FEEL.SIM_DT); if (n > 14) { n = 14; acc = n * FEEL.SIM_DT; } acc -= n * FEEL.SIM_DT; stepSim(n);
-    game.tickDirector(dt); r.draw(running ? acc / FEEL.SIM_DT : 1, dt, simDt); ui.update(dt); game.sound.update(sim, dt, !running);
+    r.speed = game.paused ? 1 : game.speed; game.tickDirector(dt); r.draw(running ? acc / FEEL.SIM_DT : 1, dt, simDt); ui.update(dt); game.sound.update(sim, dt, !running);
     if (sim.mode !== 'title' && (game.saveT += dt) > 20) game.save();
     requestAnimationFrame(frame);
   }
@@ -99,6 +100,7 @@ function boot() {
   window.__game = {
     get state() { return sim.mode; }, get playing() { return sim.mode === 'day' || sim.mode === 'gameday'; }, get day() { return sim.day; }, get score() { return sim.bucks; }, get bucks() { return sim.bucks; }, get time() { return sim.time; }, get speed() { return game.paused ? 0 : game.speed; },
     get stats() { const c = sim.cond || sim.refresh(); return { grass: c.grass, dirt: c.dirt, lines: c.lines, field: c.field, stripes: sim.stripes, firstStripe: sim.firstStripe, jobsDone: sim.doneToday, areas: c.areas }; },
+    get card() { const c = sim.card; return { season: c.season, game: c.game, opp: c.opp.id, event: c.event, pattern: c.pattern, met: sim.cardMet() }; },
     get gameday() { const g = sim.gameday; return g ? { phase: g.phase, lights: g.lights, crowd: g.crowd, home: g.board.home, away: g.board.away } : null; },
     get workers() { return sim.workers.map((w) => ({ id: w.id, state: w.state, x: w.x, y: w.y, equip: w.equip, job: w.job ? w.job.key : null })); },
     test,
