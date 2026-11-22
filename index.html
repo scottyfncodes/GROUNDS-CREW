@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>GROUNDS CREW · Cloverfield Park</title>
+  <meta name="description" content="GROUNDS CREW by HaveAnApp: look after a little ballpark. Send a tiny grounds crew to mow, drag and chalk Cloverfield Park, then open the gates.">
+  <meta name="author" content="HaveAnApp">
+  <meta name="theme-color" content="#e7dcc3">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="GROUNDS CREW">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="icon" href="assets/icons/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/icons/favicon.ico" sizes="48x48">
+  <link rel="icon" href="assets/icons/favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="icon" href="assets/icons/favicon-16.png" type="image/png" sizes="16x16">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png" sizes="180x180">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta property="og:title" content="GROUNDS CREW">
+  <meta property="og:description" content="Look after a little ballpark, one stripe at a time.">
+  <meta property="og:image" content="assets/icons/icon-1024.png">
+  <link rel="preload" href="fonts/alfa-slab-one-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/barlow-condensed-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body data-mode="loading">
+  <canvas id="game" aria-label="Cloverfield Park, seen from above. Tap the field to give the crew a job." role="img" tabindex="0"></canvas>
+
+  <header class="top" id="top" aria-label="Status">
+    <div class="chips">
+      <span class="chip" id="chip-day" aria-label="Day">DAY 1</span>
+      <span class="chip chip--bucks" id="chip-bucks" aria-label="Grounds Bucks"><i class="gem" aria-hidden="true"></i><b id="bucks">0</b></span>
+      <button class="chip chip--field" id="chip-field" type="button" aria-label="Field condition. Opens the task list."><small>FIELD</small><b id="field">0%</b></button>
+    </div>
+    <div class="tools">
+      <button class="icon" id="pause" type="button" aria-label="Pause" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="i-pause" d="M7 5h4v14H7zM13 5h4v14h-4z"/><path class="i-play" d="M8 5l11 7-11 7z"/></svg></button>
+      <button class="icon" id="settings" type="button" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 2h4l.6 3 2.5 1.4 2.9-1 2 3.4-2.3 2v2.4l2.3 2-2 3.4-2.9-1-2.5 1.4-.6 3h-4l-.6-3-2.5-1.4-2.9 1-2-3.4 2.3-2v-2.4l-2.3-2 2-3.4 2.9 1L9.400 5z M12 8.500a3.500 3.500 0 100 7 3.500 3.500 0 000-7z" fill-rule="evenodd"/></svg></button>
+    </div>
+  </header>
+
+  <section class="title" id="title" aria-label="Title">
+    <div class="sign"><small>CLOVERFIELD PARK · EST. 1948</small><h1>GROUNDS CREW</h1><i aria-hidden="true"></i></div>
+    <div class="title-foot">
+      <p class="note" id="title-note">“Morning, boss. Field could use a little love.”</p>
+      <button class="enamel" id="start" type="button">Start the day</button>
+      <p class="haveanapp-byline" data-haveanapp>GROUNDS CREW <a class="haveanapp-byline__by" href="https://haveanapp.com" rel="noopener" target="_blank">by HaveAnApp</a></p>
+    </div>
+  </section>
+
+  <p class="caption" id="caption" role="status" aria-live="polite" hidden></p>
+  <p class="note prompt" id="prompt" role="status" aria-live="polite" hidden></p>
+  <button class="chip recenter" id="recenter" type="button" hidden>Whole park</button>
+
+  <section class="sheet" id="sheet" aria-live="polite" hidden></section>
+
+  <nav class="bar" id="bar" aria-label="Controls">
+    <button class="tab" id="tab-crew" type="button">Crew</button>
+    <button class="tab" id="tab-tasks" type="button">Tasks</button>
+    <button class="tab" id="tab-shop" type="button">Shop</button>
+    <button class="tab tab--speed" id="speed" type="button" aria-label="Game speed">1×</button>
+    <button class="enamel enamel--bar" id="open-gates" type="button">Open gates</button>
+  </nav>
+  <button class="enamel enamel--skip" id="skip" type="button" hidden>Skip to the final</button>
+
+  <section class="summary" id="summary" aria-label="Day summary" hidden></section>
+  <p class="toast" id="toast" role="status" hidden></p>
+  <p class="error" id="error" role="alert" hidden></p>
+  <noscript><p class="error">GROUNDS CREW needs JavaScript to run.</p></noscript>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

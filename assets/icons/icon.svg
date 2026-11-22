@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<rect width="1024" height="1024" fill="#629c49"/>
+<g fill="#86b85c"><rect x="0" width="146" height="1024"/><rect x="292" width="147" height="1024"/><rect x="585" width="147" height="1024"/><rect x="878" width="146" height="1024"/></g>
+<path d="M512 232 L828 548 L512 864 L196 548 Z" fill="#2f5d33" opacity=".28" transform="translate(0 22)"/>
+<path d="M512 232 L828 548 L512 864 L196 548 Z" fill="#b8683f"/>
+<path d="M512 232 L828 548 L512 864 L196 548 Z" fill="none" stroke="#cf8c5c" stroke-width="14" stroke-linejoin="round"/>
+<path d="M512 352 L708 548 L512 744 L316 548 Z" fill="#7fb65a"/>
+<path d="M512 352 L610 450 L414 646 L316 548 Z" fill="#6aa550"/><path d="M610 646 L512 744 L463 695 L561 597 Z" fill="#6aa550"/>
+<circle cx="512" cy="548" r="50" fill="#b8683f"/><rect x="492" y="542" width="40" height="12" rx="3" fill="#f7f3e8"/>
+<g fill="#f7f3e8"><path d="M512 190 L554 232 L512 274 L470 232 Z"/><path d="M828 506 L870 548 L828 590 L786 548 Z"/><path d="M196 506 L238 548 L196 590 L154 548 Z"/>
+<path d="M470 826 H554 V862 L512 904 L470 862 Z"/></g>
+</svg>

@@ -1,0 +1,9 @@
+{
+ "_how": "Each feature is proven in a browser: steps a person takes, ending in what they see.",
+ "features": [
+  {"name": "starts from the title screen", "requirement": "start screen", "steps": [{"press": "Space"}, {"wait": 300}, {"assert": "window.__game.state === 'day'", "name": "Space starts the day"}]},
+  {"name": "mowing changes the grass progressively", "requirement": "progressive mowing", "steps": [{"press": "Space"}, {"wait": 200}, {"assert": "(window.__game.test.assign('gus','mow','classic'), window.__game.test.advance(40), window.__game.stats.areas.outfield > 0.3 && window.__game.stats.areas.outfield < 0.95)", "name": "the outfield is partly mown after 40 seconds"}]},
+  {"name": "two workers work at once", "requirement": "two workers simultaneously", "steps": [{"press": "Space"}, {"wait": 200}, {"assert": "(window.__game.test.assign('gus','mow','checker'), window.__game.test.assign('frankie','drag'), window.__game.test.advance(45), window.__game.workers.filter(w => w.state === 'WORKING').length === 2)", "name": "Gus and Frankie are both working"}]},
+  {"name": "the game-day sequence can be skipped to a summary", "requirement": "game-day vignette", "steps": [{"press": "Space"}, {"wait": 200}, {"assert": "(window.__game.test.finishAll(), window.__game.test.game.openGates(), window.__game.test.skipGame(), window.__game.state === 'summary' && window.__game.bucks >= 100)", "name": "the summary pays the gate and the craftsmanship bonus"}]}
+ ]
+}

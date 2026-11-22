@@ -1,0 +1,21 @@
+{"version": 1, "product": "game", "viewports": ["phone", "desktop"], "shots": [
+ {"id": "title", "name": "Title: Cloverfield Park at morning, fully loaded", "kind": "title", "steps": [],
+  "wait_for": {"selector": "#title[data-ready]", "timeout_ms": 10000}},
+ {"id": "mid-play", "name": "Mid-morning: Gus mowing a checkerboard while Frankie drags the infield", "kind": "play",
+  "steps": [{"selector": "#start"}, {"eval": "window.__game.test.assign('gus','mow','checker'); window.__game.test.assign('frankie','drag'); window.__game.test.advance(80)"}],
+  "wait_for": {"js": "window.__game.state === 'day' && window.__game.stats.grass > 0.2", "timeout_ms": 15000}},
+ {"id": "first-stripe", "name": "The first stripe is finished", "kind": "moment", "moment": "first-stripe",
+  "steps": [{"selector": "#start"}, {"eval": "window.__game.test.assign('gus','mow','classic'); window.__game.test.advanceTo('before-first-stripe')"}],
+  "sequence": {"after_ms": 1600},
+  "wait_for": {"js": "window.__game.stats.firstStripe === true", "timeout_ms": 20000}},
+ {"id": "lights-on", "name": "Open the gates: the lights come on and the crowd is in", "kind": "moment", "moment": "lights-on",
+  "steps": [{"selector": "#start"}, {"eval": "window.__game.test.finishAll()"}, {"selector": "#open-gates"}],
+  "sequence": {"after_ms": 2500},
+  "wait_for": {"js": "window.__game.state === 'gameday' && window.__game.gameday.lights >= 1", "timeout_ms": 30000}},
+ {"id": "fail", "name": "Opening the gates on an unfinished field: the crew asks if you are sure", "kind": "fail",
+  "steps": [{"selector": "#start"}, {"selector": "#open-gates"}],
+  "wait_for": {"selector": "#sheet[data-kind='unfinished']", "timeout_ms": 8000}},
+ {"id": "results", "name": "The day's summary after the game", "kind": "results",
+  "steps": [{"selector": "#start"}, {"eval": "window.__game.test.finishAll()"}, {"selector": "#open-gates"}, {"eval": "window.__game.test.skipGame()"}],
+  "wait_for": {"selector": "#summary[data-ready]", "timeout_ms": 15000}}
+]}
