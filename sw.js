@@ -1,6 +1,6 @@
 // GROUNDS CREW service worker: the park works offline once it has been opened. Network first, so a new
 // release is always what you get when you are online; the cache is only the fallback.
-const CACHE = 'grounds-crew-v1';
+const CACHE = 'grounds-crew-v2';
 const SHELL = ['./', 'index.html', 'styles.css', 'manifest.webmanifest', 'src/main.js', 'src/config.js', 'src/geometry.js', 'src/surface.js', 'src/routes.js', 'src/sim.js', 'src/gameday.js', 'src/sprites.js', 'src/render.js', 'src/audio.js', 'src/ui.js', 'src/input.js', 'src/save.js',
   'fonts/alfa-slab-one-latin-400-normal.woff2', 'fonts/barlow-condensed-latin-400-normal.woff2', 'fonts/barlow-condensed-latin-600-normal.woff2'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()).catch(() => self.skipWaiting())); });

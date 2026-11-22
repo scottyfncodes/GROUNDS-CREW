@@ -92,6 +92,11 @@ function boot() {
     test,
   };
 
+  // identity: the approved palette drives the page chrome, the logo is shown in Settings
+  fetch('assets/brand/palette.json').then((res) => (res.ok ? res.json() : null)).then((pal) => { if (!pal) return; const ok = (v) => /^#[0-9a-f]{6}$/i.test(v), root = document.documentElement.style;
+    if (ok(pal.background)) { root.setProperty('--table', pal.background); const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = pal.background; } if (ok(pal.primary)) root.setProperty('--navy', pal.primary); if (ok(pal.accent)) root.setProperty('--brass', pal.accent); }).catch(() => {});
+  fetch('assets/brand/logo.svg').then((res) => (res.ok ? res.text() : '')).then((svg) => { if (svg.includes('<svg') && !/<script|onload=|javascript:/i.test(svg)) game.logo = svg; }).catch(() => {});
+
   document.body.dataset.mode = 'title'; layout();
   if (saved.error) ui.toast('Your saved park could not be read, so this is a fresh one.');
   const ready = () => { document.getElementById('title').dataset.ready = '1'; };

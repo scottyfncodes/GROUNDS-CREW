@@ -71,6 +71,7 @@ export class UI {
       h += `<div class="set"><span>Sound</span><button class="opt" type="button" data-act="mute" aria-pressed="${!st.muted}">${st.muted ? 'Off' : 'On'}</button></div><label class="set"><span>Volume</span><input id="volume" type="range" min="0" max="100" value="${Math.round(st.volume * 100)}" aria-label="Volume"></label>`;
       h += `<div class="set"><span>Camera</span><button class="opt" type="button" data-act="recenter">Whole park</button></div><div class="set"><span>Progress</span><button class="opt" type="button" data-act="${c.confirm ? 'reset-yes' : 'reset'}">${c.confirm ? 'Yes, start over' : 'Start over'}</button></div>`;
       if (c.confirm) h += `<p class="why">This clears your days, bucks, upgrades and the field. Tap again to confirm.</p>`;
+      if (this.game.logo) h += `<div class="logo" role="img" aria-label="GROUNDS CREW, Cloverfield Park">${this.game.logo}</div>`;
       h += `<p class="about">Tap the field or a groundskeeper. Drag to look around, pinch to zoom, double-tap to see the whole park.<br><span class="haveanapp-byline" data-haveanapp>GROUNDS CREW <a class="haveanapp-byline__by" href="https://haveanapp.com" rel="noopener" target="_blank">by HaveAnApp</a></span></p>`;
     } else if (this.kind === 'unfinished') {
       const pct = Math.round(c.check.field * 100); h += this.head('Open the gates?', c.check.busy ? 'The crew is still out there.' : `The field is at ${pct}%.`);
