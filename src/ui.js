@@ -47,7 +47,7 @@ export class UI {
     const sim = this.game.sim, c = this.ctx, el = $('sheet'), cond = sim.cond || sim.refresh(); let h = '';
     if (this.kind === 'area') {
       const key = JOB_OF_AREA[c.area], def = JOBS[key], a = AREAS[c.area], v = cond.areas[c.area], active = sim.jobs[key];
-      const who = c.worker ? sim.worker(c.worker) : sim.freeWorker(a.focus), why = sim.blocked(key, c.worker || undefined);
+      const who = c.worker ? sim.worker(c.worker) : sim.freeWorker(), why = sim.blocked(key, c.worker || undefined);
       h += this.head(a.label, `${word(a.kind, v)} · ${Math.round(v * 100)}%`);
       if (c.areas.length > 1) h += `<div class="tabs" role="tablist">${c.areas.map((k) => `<button class="opt" type="button" role="tab" aria-selected="${k === c.area}" data-act="area" data-arg="${k}">${esc(AREAS[k].label)}</button>`).join('')}</div>`;
       if (def.patterned && !active) h += `<div class="opts" role="group" aria-label="Mowing pattern">${sim.patternsOwned().map((p) => `<button class="opt" type="button" aria-pressed="${p.id === c.pattern}" data-act="pattern" data-arg="${p.id}"><i class="swatch swatch--${p.id}"></i>${esc(p.name)}</button>`).join('')}</div>`;
@@ -85,7 +85,7 @@ export class UI {
       case 'close': this.close(); break;
       case 'area': c.area = arg; c.pattern = sim.patterns[arg] || 'classic'; this.render(); this.sync(); g.reframe(); break;
       case 'pattern': c.pattern = arg; this.render(); this.sync(); break;
-      case 'assign': { const key = JOB_OF_AREA[c.area], res = sim.assign(c.worker || (sim.freeWorker(AREAS[c.area].focus) || {}).id, key, c.pattern); if (res.ok) { this.close(); g.saveSoon(); } else { this.toast(res.reason); this.render(); } break; }
+      case 'assign': { const key = JOB_OF_AREA[c.area], res = sim.assign(c.worker || (sim.freeWorker() || {}).id, key, c.pattern); if (res.ok) { this.close(); g.saveSoon(); } else { this.toast(res.reason); this.render(); } break; }
       case 'cancel': sim.cancel(arg); this.render(); break;
       case 'watch': g.renderer.follow = g.renderer.follow === arg ? null : arg; if (g.renderer.follow) { g.renderer.userMoved = true; this.close(); } else { g.renderer.reset(); this.render(); } break;
       case 'worker': g.renderer.focus([sim.worker(arg).x, sim.worker(arg).y]); this.openWorker(arg); break;
