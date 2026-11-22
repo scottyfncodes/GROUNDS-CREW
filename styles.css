@@ -83,7 +83,11 @@ canvas#game:focus-visible { outline: 4px solid var(--brass); outline-offset: -4p
 
 /* the drawing pad */
 .sheet[data-kind="design"] { max-height: min(66vh, 560px); }
-.pad { display: block; width: 100%; height: auto; border: 2px solid var(--navy); border-radius: 8px; background: #e7dcc3; touch-action: none; cursor: crosshair; margin: var(--s1) 0 var(--s2); }
+.padview { position: relative; overflow: hidden; border: 2px solid var(--navy); border-radius: 8px; background: #e7dcc3; touch-action: none; margin: var(--s1) 0 var(--s2); }
+.pad { display: block; width: 100%; height: auto; transform-origin: 0 0; image-rendering: pixelated; cursor: crosshair; touch-action: none; }
+.padzoom { position: absolute; right: 6px; bottom: 6px; display: flex; gap: 6px; }
+.pz { width: 44px; height: 44px; border-radius: 10px; border: 2px solid var(--navy); background: rgba(241, 230, 207, .92); font: 400 24px/1 var(--display); color: var(--navy); box-shadow: 0 2px 0 var(--navy); padding: 0; }
+.pz:active { transform: translateY(2px); box-shadow: none; }
 .opts .opt[data-act="tool"][aria-pressed="true"] { background: var(--brass); color: var(--navy); }
 
 /* the blimp's broadcast shot */

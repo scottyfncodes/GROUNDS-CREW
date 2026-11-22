@@ -61,7 +61,7 @@ export class UI {
       else { h += `<button class="enamel" type="button" data-act="assign" ${why ? 'disabled' : ''}>${why || !who ? esc(def.label) : `Send ${esc(who.name)}`}</button>`; if (why) h += `<p class="why">${esc(why)}.</p>`; else if (sim.paid[key]) h += `<p class="sub" style="text-align:center;margin-top:8px">Already paid for today. Do it again for the love of it.</p>`; }
     } else if (this.kind === 'design') {
       const n = countCells(sim.design), who = c.worker ? sim.worker(c.worker) : sim.freeWorker(), why = sim.blocked('mow:outfield', c.worker || undefined);
-      h += this.head('Draw for the blimp', 'Paint the outfield. Your squares are mown dark.') + `<canvas class="pad" id="pad" width="${COLS * 20}" height="${ROWS * 20}" aria-label="Outfield drawing pad"></canvas>`;
+      h += this.head('Draw for the blimp', 'Paint with a finger. Pinch to zoom in.') + `<div class="padview" id="padview"><canvas class="pad" id="pad" width="${COLS * 20}" height="${ROWS * 20}" aria-label="Outfield drawing pad. Pinch to zoom."></canvas><div class="padzoom"><button type="button" class="pz" data-act="padzoom" data-arg="out" aria-label="Zoom out">−</button><button type="button" class="pz" data-act="padzoom" data-arg="in" aria-label="Zoom in">+</button></div></div>`;
       h += `<div class="opts" role="group" aria-label="Brush"><button class="opt" type="button" data-act="tool" data-arg="paint" aria-pressed="${c.tool !== 'erase'}">Paint</button><button class="opt" type="button" data-act="tool" data-arg="erase" aria-pressed="${c.tool === 'erase'}">Erase</button>${Object.entries(STAMPS).map(([id, st]) => `<button class="opt" type="button" data-act="stamp" data-arg="${id}">${esc(st.name)}</button>`).join('')}<button class="opt" type="button" data-act="clear">Clear</button></div>`;
       h += `<div class="actions"><button class="enamel enamel--quiet" type="button" data-act="back">Back</button><button class="enamel" type="button" data-act="mow-design" ${why || !n ? 'disabled' : ''}>${!n ? 'Draw first' : why ? esc(why) : `Send ${esc(who.name)}`}</button></div>`;
     } else if (this.kind === 'worker') {
@@ -89,7 +89,7 @@ export class UI {
       const pct = Math.round(c.check.field * 100); h += this.head('Open the gates?', c.check.busy ? 'The crew is still out there.' : `The field is at ${pct}%.`);
       h += `<p class="sub">${c.check.busy ? 'They will put their gear away and clear the field first. ' : ''}${pct < 90 ? 'A rougher field means a smaller craftsmanship bonus, nothing worse.' : 'Looks ready.'}</p><div class="actions"><button class="enamel enamel--quiet" type="button" data-act="close">Keep working</button><button class="enamel" type="button" data-act="gates-yes">Open them</button></div>`;
     }
-    el.innerHTML = h; if (this.kind === 'design') this.drawPad();
+    el.innerHTML = h; if (this.kind === 'design') { this.drawPad(); this.applyPadZoom(); }
   }
 
   act(act, arg) {
@@ -98,8 +98,9 @@ export class UI {
       case 'close': this.close(); break;
       case 'area': c.area = arg; c.pattern = sim.patterns[arg] || 'classic'; this.render(); this.sync(); g.reframe(); break;
       case 'pattern': c.pattern = arg; this.render(); this.sync(); break;
-      case 'draw': this.open('design', { worker: c.worker, tool: 'paint', from: c }); g.renderer.focus([0, 250]); g.renderer.userMoved = false; break;
+      case 'draw': this.padZ = { s: 1, x: 0, y: 0 }; this.open('design', { worker: c.worker, tool: 'paint', from: c }); g.renderer.focus([0, 250]); g.renderer.userMoved = false; break;
       case 'tool': c.tool = arg; this.render(); this.drawPad(); break;
+      case 'padzoom': { const v = $('padview'); if (v) this.zoomPad(arg === 'in' ? 1.6 : 1 / 1.6, v.clientWidth / 2, v.clientHeight / 2); break; }
       case 'stamp': sim.setDesign(stamp(arg), STAMPS[arg].name); this.render(); this.drawPad(); this.sync(); break;
       case 'clear': sim.setDesign(emptyDesign(), 'Your design'); this.render(); this.drawPad(); this.sync(); break;
       case 'back': { const from = c.from || { areas: ['outfield'], area: 'outfield' }; this.open('area', { ...from, pattern: countCells(sim.design) ? 'design' : sim.patterns.outfield }); break; }
@@ -130,16 +131,36 @@ export class UI {
       let col = null; if (PAINTABLE[i]) col = d[i] ? '#4b8a3e' : ((c + r) & 1 ? '#9fcb6c' : '#95c264'); else if (rg === RG.TRACK) col = '#a8623f'; else if (rg === RG.SKIN || rg === RG.MOUND) col = '#cf8c5c'; else if (rg === RG.INFIELD || rg === RG.FOUL || rg === RG.OUTFIELD) col = '#86b85c';
       if (!col) continue; g.fillStyle = col; g.fillRect(px, py, z, z); if (PAINTABLE[i] && d[i]) { g.fillStyle = 'rgba(0,0,0,.12)'; g.fillRect(px, py + z - 3, z, 3); } }
     g.strokeStyle = 'rgba(43,58,85,.12)'; g.lineWidth = 1; for (let c = 1; c < COLS; c++) { g.beginPath(); g.moveTo(c * z + 0.5, 0); g.lineTo(c * z + 0.5, cv.height); g.stroke(); } for (let r = 1; r < ROWS; r++) { g.beginPath(); g.moveTo(0, r * z + 0.5); g.lineTo(cv.width, r * z + 0.5); g.stroke(); }
-    const sub = $('sheet').querySelector('.sub'); if (sub) sub.textContent = countCells(d) ? `${countCells(d)} squares. Your squares are mown dark.` : 'Paint the outfield. Your squares are mown dark.';
+    const sub = $('sheet').querySelector('.sub'); if (sub) sub.textContent = countCells(d) ? `${countCells(d)} square${countCells(d) === 1 ? '' : 's'}. Pinch to zoom in.` : 'Paint with a finger. Pinch to zoom in.';
   }
+  /** Zoom the pad around a point in the viewport (px), keeping that point under the finger; the pad always fills the view. */
+  zoomPad(f, px, py) {
+    const z = this.padZ || (this.padZ = { s: 1, x: 0, y: 0 }), v = $('padview'); if (!v) return; const s2 = Math.min(4, Math.max(1, z.s * f)), k = s2 / z.s;
+    z.x = px - (px - z.x) * k; z.y = py - (py - z.y) * k; z.s = s2; this.applyPadZoom();
+  }
+  applyPadZoom() {
+    const z = this.padZ || (this.padZ = { s: 1, x: 0, y: 0 }), v = $('padview'), cv = $('pad'); if (!v || !cv) return; const w = v.clientWidth, h = v.clientHeight;
+    z.x = Math.min(0, Math.max(w - w * z.s, z.x)); z.y = Math.min(0, Math.max(h - h * z.s, z.y)); cv.style.transform = `translate(${z.x}px, ${z.y}px) scale(${z.s})`; v.dataset.zoomed = z.s > 1.01 ? '1' : '';
+  }
+  /** One finger paints; two fingers pinch to zoom and drag to pan; the wheel zooms on a desktop. */
   bindPad() {
-    const sheet = $('sheet'); let painting = null;
+    const sheet = $('sheet'), pts = new Map(); let painting = null, before = null, pinch = null;
     const at = (e) => { const cv = $('pad'), b = cv.getBoundingClientRect(), c = Math.floor((e.clientX - b.left) / b.width * COLS), r = ROWS - 1 - Math.floor((e.clientY - b.top) / b.height * ROWS); return c >= 0 && r >= 0 && c < COLS && r < ROWS ? r * COLS + c : -1; };
     const paint = (e) => { const i = at(e), sim = this.game.sim; if (i < 0 || !PAINTABLE[i] || sim.design[i] === painting) return; const d = sim.design.slice(); d[i] = painting; sim.setDesign(d, countCells(d) ? (sim.designName === 'Your design' || !sim.designName ? 'Your design' : sim.designName) : 'Your design'); this.drawPad(); this.dirtyPad = true; };
-    sheet.addEventListener('pointerdown', (e) => { if (e.target.id !== 'pad') return; e.preventDefault(); e.target.setPointerCapture(e.pointerId); painting = this.ctx && this.ctx.tool === 'erase' ? 0 : 1; this.game.sound.unlock(); paint(e); });
-    sheet.addEventListener('pointermove', (e) => { if (painting === null || e.target.id !== 'pad') return; paint(e); });
-    const end = () => { if (painting === null) return; painting = null; if (this.dirtyPad) { this.dirtyPad = false; this.render(); this.drawPad(); this.sync(); } };
+    const local = (p) => { const b = $('padview').getBoundingClientRect(); return [p.x - b.left, p.y - b.top]; };
+    const two = () => { const [a, b] = [...pts.values()]; return { mid: local({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }), d: Math.hypot(a.x - b.x, a.y - b.y) }; };
+    const inPad = (e) => e.target.closest && e.target.closest('#padview') && !e.target.closest('.padzoom');
+    sheet.addEventListener('pointerdown', (e) => { if (!inPad(e)) return; e.preventDefault(); try { e.target.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); this.game.sound.unlock();
+      if (pts.size === 1) { painting = this.ctx && this.ctx.tool === 'erase' ? 0 : 1; before = this.game.sim.design.slice(); paint(e); }
+      else if (pts.size === 2) { // a second finger: this is a pinch, not a stroke; take back anything the first finger painted
+        if (painting !== null && before) { this.game.sim.setDesign(before, this.game.sim.designName); this.drawPad(); } painting = null; this.dirtyPad = false; pinch = two(); } });
+    sheet.addEventListener('pointermove', (e) => { const p = pts.get(e.pointerId); if (!p) return; p.x = e.clientX; p.y = e.clientY;
+      if (pts.size >= 2 && pinch) { const now = two(), z = this.padZ || (this.padZ = { s: 1, x: 0, y: 0 }); this.zoomPad(now.d / Math.max(1, pinch.d), pinch.mid[0], pinch.mid[1]); z.x += now.mid[0] - pinch.mid[0]; z.y += now.mid[1] - pinch.mid[1]; this.applyPadZoom(); pinch = now; }
+      else if (painting !== null) paint(e); });
+    const end = (e) => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; if (painting === null || pts.size) return; painting = null; before = null; if (this.dirtyPad) { this.dirtyPad = false; this.render(); this.drawPad(); this.sync(); } };
     sheet.addEventListener('pointerup', end); sheet.addEventListener('pointercancel', end);
+    sheet.addEventListener('wheel', (e) => { if (!inPad(e)) return; e.preventDefault(); const [x, y] = local({ x: e.clientX, y: e.clientY }); this.zoomPad(Math.exp(-e.deltaY * 0.002), x, y); }, { passive: false });
   }
   async postcard() {
     const s = this.game.sim.summary; if (!s) return; const b = $('postcard'); b.disabled = true;
