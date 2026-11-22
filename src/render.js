@@ -6,6 +6,7 @@ import { PAL, FEEL } from './config.js';
 import { BOUNDS, RES, GW, GH, S2, BASE, FIRST, SECOND, THIRD, MOUND, WALL_H, SHED, NAV, GATE_T, fenceR, foulW, linePt, region, RG, AREAS, clamp, lerp } from './geometry.js';
 import { hash2, wx, wy } from './surface.js';
 import { patternParity } from './routes.js';
+import { maskOf } from './design.js';
 import { ST } from './sim.js';
 import { CHARS, heightOf, drawPerson, drawRider, drawPush, drawChalker, drawRakeParked, drawBird, drawCat, bakeCanopy, plotter } from './sprites.js';
 
@@ -130,8 +131,9 @@ export class Renderer {
         if (!inA(i, j)) continue; const edge = !inA(i - 1, j) || !inA(i + 1, j) || !inA(i, j - 1) || !inA(i, j + 1) || !inA(i - 2, j) || !inA(i + 2, j) || !inA(i, j - 2) || !inA(i, j + 2), o = (j * w + i) * 4; D[o] = 255; D[o + 1] = 248; D[o + 2] = 225; D[o + 3] = edge ? 235 : 38; } });
   }
   previewOverlay(area, pattern) {
-    const S = this.surface, id = AREAS[area].id, par = patternParity(area, pattern, area === 'infield' ? FEEL.PUSH_WIDTH : FEEL.RIDER_WIDTH);
-    return this.overlay(`p:${area}:${pattern}`, (D, w, h) => { for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) { const q = (j * 2) * GW + i * 2; if (S.area[q] !== id) continue; const p = par(wx(i * 2), wy(j * 2)), o = (j * w + i) * 4; if (p) { D[o] = 215; D[o + 1] = 240; D[o + 2] = 160; D[o + 3] = 105; } else { D[o] = 30; D[o + 1] = 70; D[o + 2] = 40; D[o + 3] = 80; } } });
+    const S = this.surface, id = AREAS[area].id, dz = pattern === 'design', par = patternParity(area, pattern, area === 'infield' ? FEEL.PUSH_WIDTH : FEEL.RIDER_WIDTH, dz ? maskOf(this.sim.design) : null);
+    const key = `p:${area}:${pattern}${dz ? ':' + this.sim.designV : ''}`; if (dz) for (const k in this.overlays) if (k.startsWith(`p:${area}:design:`) && k !== key) delete this.overlays[k];
+    return this.overlay(key, (D, w, h) => { for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) { const q = (j * 2) * GW + i * 2; if (S.area[q] !== id) continue; const p = par(wx(i * 2), wy(j * 2)), o = (j * w + i) * 4; if (p) { D[o] = 215; D[o + 1] = 240; D[o + 2] = 160; D[o + 3] = 105; } else { D[o] = 30; D[o + 1] = 70; D[o + 2] = 40; D[o + 3] = 80; } } });
   }
 
   // ---- frame -------------------------------------------------------------------------------------------
@@ -143,6 +145,7 @@ export class Renderer {
     // camera
     this._dt = dt;
     if (this.follow) { const w = sim.worker(this.follow); if (w) { this.to.x = w.x; this.to.y = w.y + 14; this.to.s = Math.max(this.to.s, this.home.s * 1.9); } }
+    const gdp = sim.gameday && sim.gameday.phase; if (gdp === 'blimp' && !this.userMoved) { const sc = this.home.s * 1.18; this.to = { x: 0, y: 250, s: sc }; }
     const directing = this.direct();
     const rate = directing ? 0.03 : FEEL.CAMERA_EASE, e = this.reduced ? 1 : 1 - Math.pow(1 - rate, dt * 60), es = this.reduced ? 1 : 1 - Math.pow(1 - (directing ? 0.022 : rate), dt * 60);
     c.x += (this.to.x - c.x) * e; c.y += (this.to.y - c.y) * e; c.s += (this.to.s - c.s) * es;
@@ -244,6 +247,7 @@ export class Renderer {
     // everything upright, far to near
     const list = this.uprights.concat(actors); list.sort((a, b) => b.y - a.y);
     for (const o of list) this._upright(o, { g, X, Y, s, u, t, L, box, poly, dt });
+    this._blimp(g, X, Y, s, u, t, L, dt, sv);
 
     // particles
     const wsp = simDt; this._emit(dt, wsp);
@@ -252,6 +256,7 @@ export class Renderer {
     for (let i = this.sparks.length - 1; i >= 0; i--) { const sp = this.sparks[i], k0 = sp.t / 0.7; sp.t += dt; const k1 = Math.min(1, sp.t / 0.7); for (let k = k0; k < k1; k += 0.07) this.parts.push({ x: lerp(sp.a[0], sp.b[0], k), y: lerp(sp.a[1], sp.b[1], k), z: 2, vx: 0, vy: 0, vz: 9, life: 0.55, max: 0.55, c: sp.chalk ? '#ffffff' : (Math.random() < 0.5 ? '#fff8d8' : PAL.sunlit), s: 1.2 }); if (k1 >= 1) this.sparks.splice(i, 1); }
 
     this._light(g, X, Y, s, L);
+    if (this.blimpOn && L.night > 0.3) { const b = this.blimpAt; for (const [dx, c] of [[-30, '#ff5a4a'], [30, '#7dffa0']]) if (Math.sin(t * 3 + dx) > 0.2) { g.globalCompositeOperation = 'lighter'; g.fillStyle = c; g.beginPath(); g.arc(X(b.x + dx), Y(b.y, b.z), 2.4 * s, 0, 6.3); g.fill(); g.globalCompositeOperation = 'source-over'; } }
     if (this.fw.length) { g.globalCompositeOperation = 'lighter'; for (let i = this.fw.length - 1; i >= 0; i--) { const p = this.fw[i]; p.life -= dt; if (p.life <= 0) { this.fw.splice(i, 1); continue; } p.x += p.vx * dt; p.z += p.vz * dt; p.vz -= 18 * dt; p.vx *= 0.985; p.vz *= 0.985; g.globalAlpha = Math.min(1, p.life / 1.2); g.fillStyle = p.c; const ps = Math.max(1.5, 1.6 * s); g.fillRect(X(p.x) - ps / 2, Y(p.y, p.z) - ps / 2, ps, ps); } g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; }
 
     // readable things on top of the light
@@ -365,6 +370,26 @@ export class Renderer {
     g.fillStyle = PAL.fadedNavy; g.fillRect(bx - 2, by - 2, w + 4, h + 6); g.fillStyle = PAL.vintageCream; g.fillRect(bx, by, w, h);
     g.beginPath(); g.moveTo(x - 5, by + h); g.lineTo(x + 5, by + h); g.lineTo(x, by + h + 6); g.closePath(); g.fillStyle = PAL.fadedNavy; g.fill();
     g.fillStyle = PAL.fadedNavy; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText(text, bx + 7, by + h / 2 + 1); g.restore();
+  }
+
+  /** The Cloverfield blimp: over the title, and over every game. On a broadcast night it parks over centre field. */
+  _blimp(g, X, Y, s, u, t, L, dt, sv) {
+    const sim = this.sim, gd = sim.gameday, on = sim.mode === 'title' || (gd && gd.phase !== 'clearing');
+    if (!on) { this.blimpOn = false; this.bx = null; return; }
+    if (this.bx == null) this.bx = sim.mode === 'title' ? -120 : -430;
+    const hold = gd && (gd.phase === 'blimp' || gd.phase === 'lights'), target = hold ? 150 : 460; this.bx += Math.sign(target - this.bx) * Math.min(Math.abs(target - this.bx), dt * (hold ? 60 : sim.mode === 'title' ? 7 : 16));
+    if (!hold && this.bx >= 459) this.bx = -460;
+    const b = this.blimpAt = { x: this.bx, y: 372 + Math.sin(t * 0.4) * 4, z: 128 + Math.sin(t * 0.7) * 3 }; this.blimpOn = true;
+    // its shadow slides over the field in daylight
+    const day = 1 - L.night; if (day > 0.05) { g.fillStyle = `rgba(30,40,50,${0.12 * day})`; g.beginPath(); g.ellipse(X(b.x + sv[0] * b.z * 0.5), Y(b.y + 20) + sv[1] * b.z * s * 0.5, 44 * s, 15 * s, 0, 0, 6.3); g.fill(); }
+    const cx = X(b.x), cy = Y(b.y, b.z), rx = 44 * s, ry = 15 * s;
+    g.fillStyle = '#d9cfb8'; g.beginPath(); g.moveTo(cx - rx * 0.9, cy); g.lineTo(cx - rx * 1.18, cy - ry * 0.9); g.lineTo(cx - rx * 1.02, cy); g.lineTo(cx - rx * 1.18, cy + ry * 0.9); g.closePath(); g.fill();   // fins
+    g.fillStyle = PAL.vintageCream; g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, 6.3); g.fill();
+    g.fillStyle = '#e8dcc3'; g.beginPath(); g.ellipse(cx, cy + ry * 0.35, rx * 0.96, ry * 0.62, 0, 0, Math.PI); g.fill();
+    g.fillStyle = PAL.fadedNavy; g.fillRect(cx - rx * 0.62, cy - ry * 0.32, rx * 1.24, ry * 0.64);
+    g.fillStyle = PAL.vintageCream; g.font = `${Math.max(5, 7.4 * s)}px "Alfa Slab One", serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('CLOVERFIELD', cx, cy + 0.5);
+    g.fillStyle = PAL.brickRed; g.fillRect(cx - rx * 0.62, cy - ry * 0.32 - 1.2 * s, rx * 1.24, 1.2 * s); g.fillRect(cx - rx * 0.62, cy + ry * 0.32, rx * 1.24, 1.2 * s);
+    g.fillStyle = PAL.warmCharcoal; g.fillRect(cx - 7 * s, cy + ry * 0.92, 14 * s, 4 * s); g.fillStyle = L.night > 0.4 ? '#ffd98a' : '#9fb3c8'; g.fillRect(cx - 5 * s, cy + ry * 0.92 + 1 * s, 10 * s, 1.6 * s);
   }
 
   /** Things that live in the park on their own: a cat on the outfield wall, fans coming in for the game. */

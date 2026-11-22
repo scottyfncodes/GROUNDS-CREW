@@ -2,6 +2,9 @@
 import { UPGRADES, PATTERNS, PAY, SEASON_GAMES } from './config.js';
 import { AREAS } from './geometry.js';
 import { JOBS, JOB_OF_AREA, ST } from './sim.js';
+import { STAMPS, stamp, emptyDesign, countCells, PAINTABLE, COLS, ROWS, cellCenter } from './design.js';
+import { region, RG } from './geometry.js';
+import { makePostcard, sharePostcard } from './postcard.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -20,7 +23,8 @@ export class UI {
     click('open-gates', () => this.gates()); click('today', () => { this.hideCard(); this.open('tasks'); }); click('skip', () => g.skipGame()); click('recenter', () => { const m = $('recenter').dataset.mode; if (m === 'wide') g.setDirector(false); else if (m === 'follow') g.setDirector(true); else g.renderer.reset(); });
     $('sheet').addEventListener('click', (e) => { const b = e.target.closest('[data-act]'); if (!b || b.disabled) return; g.sound.unlock(); g.sound.click(); this.act(b.dataset.act, b.dataset.arg); });
     $('sheet').addEventListener('input', (e) => { if (e.target.id === 'volume') g.setVolume(e.target.value / 100); });
-    $('summary').addEventListener('click', (e) => { if (e.target.closest('#next-day')) { g.sound.click(); g.nextDay(); } });
+    $('summary').addEventListener('click', (e) => { if (e.target.closest('#next-day')) { g.sound.click(); g.nextDay(); } else if (e.target.closest('#postcard')) { g.sound.click(); this.postcard(); } });
+    this.bindPad();
     addEventListener('keydown', (e) => { if (e.target.tagName === 'INPUT') return; const k = e.key;
       if (g.sim.mode === 'title' && (k === ' ' || k === 'Enter')) { e.preventDefault(); g.sound.unlock(); g.start(); return; }
       if (k === 'Escape') this.close(); else if (k === ' ') { e.preventDefault(); g.togglePause(); } else if (k === '1' || k === '2' || k === '4') g.setSpeed(+k); else if (k === '0') g.renderer.reset();
@@ -37,7 +41,7 @@ export class UI {
   cover() { const s = $('sheet'); if (s.hidden || innerWidth > innerHeight) return 0; return innerHeight - s.getBoundingClientRect().top; }
   sync() {
     const r = this.game.renderer, k = this.kind, c = this.ctx || {};
-    r.selected = k === 'area' ? c.area : k === 'worker' ? c.id : c.worker || null; r.preview = k === 'area' && JOBS[JOB_OF_AREA[c.area]].patterned ? { area: c.area, pattern: c.pattern } : null;
+    r.selected = k === 'area' ? c.area : k === 'worker' ? c.id : c.worker || null; r.preview = k === 'design' ? { area: 'outfield', pattern: 'design' } : k === 'area' && JOBS[JOB_OF_AREA[c.area]].patterned ? { area: c.area, pattern: c.pattern } : null; if (k === 'design') r.selected = null;
     for (const t of ['crew', 'tasks', 'shop']) $('tab-' + t).setAttribute('aria-expanded', String(k === t));
   }
   openArea(areas, worker) { const area = areas[0], sim = this.game.sim; this.open('area', { area, areas, worker: worker || null, pattern: sim.patterns[area] || 'classic' }); }
@@ -52,9 +56,14 @@ export class UI {
       const who = c.worker ? sim.worker(c.worker) : sim.freeWorker(), why = sim.blocked(key, c.worker || undefined);
       h += this.head(a.label, `${word(a.kind, v)} · ${Math.round(v * 100)}%`);
       if (c.areas.length > 1) h += `<div class="tabs" role="tablist">${c.areas.map((k) => `<button class="opt" type="button" role="tab" aria-selected="${k === c.area}" data-act="area" data-arg="${k}">${esc(AREAS[k].label)}</button>`).join('')}</div>`;
-      if (def.patterned && !active) { const req = c.area === 'outfield' && sim.card.event === 'pattern' ? sim.card.pattern : null; h += `<div class="opts" role="group" aria-label="Mowing pattern">${sim.patternsOwned(c.area).map((p) => `<button class="opt" type="button" aria-pressed="${p.id === c.pattern}" data-act="pattern" data-arg="${p.id}"><i class="swatch swatch--${p.id}"></i>${esc(p.name)}${p.id === req ? '<span class="tag">ASKED</span>' : ''}</button>`).join('')}</div>`; }
+      if (def.patterned && !active) { const req = c.area === 'outfield' && sim.card.event === 'pattern' ? sim.card.pattern : null; h += `<div class="opts" role="group" aria-label="Mowing pattern">${sim.patternsOwned(c.area).map((p) => p.id === 'design' ? `<button class="opt" type="button" data-act="draw" aria-pressed="${c.pattern === 'design'}"><i class="swatch swatch--design"></i>${countCells(sim.design) ? esc(sim.designName) : 'Draw your own'}${sim.card.event === 'art' ? '<span class="tag">ASKED</span>' : !sim.designsMowed ? '<span class="tag">NEW</span>' : ''}</button>` : `<button class="opt" type="button" aria-pressed="${p.id === c.pattern}" data-act="pattern" data-arg="${p.id}"><i class="swatch swatch--${p.id}"></i>${esc(p.name)}${p.id === req ? '<span class="tag">ASKED</span>' : ''}</button>`).join('')}</div>`; }
       if (active) h += `<p class="sub">${esc(sim.statusOf(active.worker))} (${esc(active.worker.name)})</p><div class="actions"><button class="enamel enamel--quiet" type="button" data-act="watch" data-arg="${active.worker.id}">Watch</button><button class="enamel enamel--quiet" type="button" data-act="cancel" data-arg="${active.worker.id}">Call it off</button></div>`;
       else { h += `<button class="enamel" type="button" data-act="assign" ${why ? 'disabled' : ''}>${why || !who ? esc(def.label) : `Send ${esc(who.name)}`}</button>`; if (why) h += `<p class="why">${esc(why)}.</p>`; else if (sim.paid[key]) h += `<p class="sub" style="text-align:center;margin-top:8px">Already paid for today. Do it again for the love of it.</p>`; }
+    } else if (this.kind === 'design') {
+      const n = countCells(sim.design), who = c.worker ? sim.worker(c.worker) : sim.freeWorker(), why = sim.blocked('mow:outfield', c.worker || undefined);
+      h += this.head('Draw for the blimp', 'Paint the outfield. Your squares are mown dark.') + `<canvas class="pad" id="pad" width="${COLS * 20}" height="${ROWS * 20}" aria-label="Outfield drawing pad"></canvas>`;
+      h += `<div class="opts" role="group" aria-label="Brush"><button class="opt" type="button" data-act="tool" data-arg="paint" aria-pressed="${c.tool !== 'erase'}">Paint</button><button class="opt" type="button" data-act="tool" data-arg="erase" aria-pressed="${c.tool === 'erase'}">Erase</button>${Object.entries(STAMPS).map(([id, st]) => `<button class="opt" type="button" data-act="stamp" data-arg="${id}">${esc(st.name)}</button>`).join('')}<button class="opt" type="button" data-act="clear">Clear</button></div>`;
+      h += `<div class="actions"><button class="enamel enamel--quiet" type="button" data-act="back">Back</button><button class="enamel" type="button" data-act="mow-design" ${why || !n ? 'disabled' : ''}>${!n ? 'Draw first' : why ? esc(why) : `Send ${esc(who.name)}`}</button></div>`;
     } else if (this.kind === 'worker') {
       const w = sim.worker(c.id); h += this.head(w.name, w.bio) + `<p class="set"><span id="w-status">${esc(sim.statusOf(w))}</span></p>`;
       h += `<div class="actions"><button class="enamel enamel--quiet" type="button" data-act="watch" data-arg="${w.id}">${this.game.renderer.follow === w.id ? 'Stop watching' : 'Watch'}</button>${w.job ? `<button class="enamel enamel--quiet" type="button" data-act="cancel" data-arg="${w.id}">Call it off</button>` : ''}</div>`;
@@ -80,7 +89,7 @@ export class UI {
       const pct = Math.round(c.check.field * 100); h += this.head('Open the gates?', c.check.busy ? 'The crew is still out there.' : `The field is at ${pct}%.`);
       h += `<p class="sub">${c.check.busy ? 'They will put their gear away and clear the field first. ' : ''}${pct < 90 ? 'A rougher field means a smaller craftsmanship bonus, nothing worse.' : 'Looks ready.'}</p><div class="actions"><button class="enamel enamel--quiet" type="button" data-act="close">Keep working</button><button class="enamel" type="button" data-act="gates-yes">Open them</button></div>`;
     }
-    el.innerHTML = h;
+    el.innerHTML = h; if (this.kind === 'design') this.drawPad();
   }
 
   act(act, arg) {
@@ -89,6 +98,12 @@ export class UI {
       case 'close': this.close(); break;
       case 'area': c.area = arg; c.pattern = sim.patterns[arg] || 'classic'; this.render(); this.sync(); g.reframe(); break;
       case 'pattern': c.pattern = arg; this.render(); this.sync(); break;
+      case 'draw': this.open('design', { worker: c.worker, tool: 'paint', from: c }); g.renderer.focus([0, 250]); g.renderer.userMoved = false; break;
+      case 'tool': c.tool = arg; this.render(); this.drawPad(); break;
+      case 'stamp': sim.setDesign(stamp(arg), STAMPS[arg].name); this.render(); this.drawPad(); this.sync(); break;
+      case 'clear': sim.setDesign(emptyDesign(), 'Your design'); this.render(); this.drawPad(); this.sync(); break;
+      case 'back': { const from = c.from || { areas: ['outfield'], area: 'outfield' }; this.open('area', { ...from, pattern: countCells(sim.design) ? 'design' : sim.patterns.outfield }); break; }
+      case 'mow-design': { const res = sim.assign(c.worker || (sim.freeWorker() || {}).id, 'mow:outfield', 'design'); if (res.ok) { this.close(); g.saveSoon(); } else this.toast(res.reason); break; }
       case 'assign': { const key = JOB_OF_AREA[c.area], res = sim.assign(c.worker || (sim.freeWorker() || {}).id, key, c.pattern); if (res.ok) { this.close(); g.saveSoon(); } else { this.toast(res.reason); this.render(); } break; }
       case 'cancel': sim.cancel(arg); this.render(); break;
       case 'watch': g.renderer.follow = g.renderer.follow === arg ? null : arg; if (g.renderer.follow) { g.renderer.userMoved = true; this.close(); } else { g.renderer.reset(); this.render(); } break;
@@ -108,6 +123,29 @@ export class UI {
   /** Show tonight's card for a few seconds at the start of a day. */
   showCard() { const sim = this.game.sim, c = sim.card, el = $('today'); el.innerHTML = `<b>vs ${esc(c.opp.name)} <span>GAME ${c.game} OF ${SEASON_GAMES}</span></b><p>${esc(c.text)}${c.bonus ? ` <strong>+${c.bonus}</strong>` : ''}</p>`; el.hidden = false; this.cardT = 9; }
   hideCard() { $('today').hidden = true; this.cardT = 0; }
+  /** The drawing pad: the outfield seen straight down, one square per 16 ft; drag to paint or erase. */
+  drawPad() {
+    const cv = $('pad'); if (!cv) return; const g = cv.getContext('2d'), d = this.game.sim.design, z = 20; g.clearRect(0, 0, cv.width, cv.height);
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) { const i = r * COLS + c, [x, y] = cellCenter(c, r), rg = region(x, y), px = c * z, py = (ROWS - 1 - r) * z;
+      let col = null; if (PAINTABLE[i]) col = d[i] ? '#4b8a3e' : ((c + r) & 1 ? '#9fcb6c' : '#95c264'); else if (rg === RG.TRACK) col = '#a8623f'; else if (rg === RG.SKIN || rg === RG.MOUND) col = '#cf8c5c'; else if (rg === RG.INFIELD || rg === RG.FOUL || rg === RG.OUTFIELD) col = '#86b85c';
+      if (!col) continue; g.fillStyle = col; g.fillRect(px, py, z, z); if (PAINTABLE[i] && d[i]) { g.fillStyle = 'rgba(0,0,0,.12)'; g.fillRect(px, py + z - 3, z, 3); } }
+    g.strokeStyle = 'rgba(43,58,85,.12)'; g.lineWidth = 1; for (let c = 1; c < COLS; c++) { g.beginPath(); g.moveTo(c * z + 0.5, 0); g.lineTo(c * z + 0.5, cv.height); g.stroke(); } for (let r = 1; r < ROWS; r++) { g.beginPath(); g.moveTo(0, r * z + 0.5); g.lineTo(cv.width, r * z + 0.5); g.stroke(); }
+    const sub = $('sheet').querySelector('.sub'); if (sub) sub.textContent = countCells(d) ? `${countCells(d)} squares. Your squares are mown dark.` : 'Paint the outfield. Your squares are mown dark.';
+  }
+  bindPad() {
+    const sheet = $('sheet'); let painting = null;
+    const at = (e) => { const cv = $('pad'), b = cv.getBoundingClientRect(), c = Math.floor((e.clientX - b.left) / b.width * COLS), r = ROWS - 1 - Math.floor((e.clientY - b.top) / b.height * ROWS); return c >= 0 && r >= 0 && c < COLS && r < ROWS ? r * COLS + c : -1; };
+    const paint = (e) => { const i = at(e), sim = this.game.sim; if (i < 0 || !PAINTABLE[i] || sim.design[i] === painting) return; const d = sim.design.slice(); d[i] = painting; sim.setDesign(d, countCells(d) ? (sim.designName === 'Your design' || !sim.designName ? 'Your design' : sim.designName) : 'Your design'); this.drawPad(); this.dirtyPad = true; };
+    sheet.addEventListener('pointerdown', (e) => { if (e.target.id !== 'pad') return; e.preventDefault(); e.target.setPointerCapture(e.pointerId); painting = this.ctx && this.ctx.tool === 'erase' ? 0 : 1; this.game.sound.unlock(); paint(e); });
+    sheet.addEventListener('pointermove', (e) => { if (painting === null || e.target.id !== 'pad') return; paint(e); });
+    const end = () => { if (painting === null) return; painting = null; if (this.dirtyPad) { this.dirtyPad = false; this.render(); this.drawPad(); this.sync(); } };
+    sheet.addEventListener('pointerup', end); sheet.addEventListener('pointercancel', end);
+  }
+  async postcard() {
+    const s = this.game.sim.summary; if (!s) return; const b = $('postcard'); b.disabled = true;
+    try { const blob = await makePostcard(this.game.sim.surface, s), how = await sharePostcard(blob, `cloverfield-day-${s.day}.png`); if (how === 'saved') this.toast('Postcard saved.'); else if (how === 'shared') this.toast('Postcard sent.'); }
+    catch { this.toast('Could not make the postcard.'); } finally { b.disabled = false; }
+  }
   gates() { const g = this.game, check = g.sim.gateCheck(); if (check.unfinished) this.open('unfinished', { check }); else g.openGates(); }
   toast(text) { const t = $('toast'); t.textContent = text; t.hidden = false; this.toastT = 2.6; }
   set(id, text) { if (this.cache[id] !== text) { this.cache[id] = text; $(id).textContent = text; } }
@@ -120,7 +158,8 @@ export class UI {
     this.set('speed', `${g.speed}×`); const paused = g.paused; if (this.cache.paused !== paused) { this.cache.paused = paused; $('pause').setAttribute('aria-pressed', String(paused)); $('pause').setAttribute('aria-label', paused ? 'Resume' : 'Pause'); }
     if (this.toastT > 0 && (this.toastT -= dt) <= 0) $('toast').hidden = true;
     if (this.cardT > 0 && ((this.cardT -= dt) <= 0 || this.kind)) this.hideCard();
-    const gd = sim.gameday, cap = sim.mode === 'gameday' && gd ? gd.caption : ''; if (this.cache.cap !== cap) { this.cache.cap = cap; $('caption').textContent = cap; $('caption').hidden = !cap; }
+    { const on = sim.mode === 'gameday' && sim.gameday && sim.gameday.phase === 'blimp'; if (this.cache.bc !== on) { this.cache.bc = on; const b = $('broadcast'); b.hidden = !on; if (on) { $('bc-look').textContent = sim.gameday.look; const st = sim.gameday.stars; $('bc-stars').textContent = '★'.repeat(st) + '☆'.repeat(3 - st); $('bc-stars').setAttribute('aria-label', `${st} of 3 stars`); } } }
+    const gd = sim.gameday, cap = sim.mode === 'gameday' && gd && gd.phase !== 'blimp' ? gd.caption : ''; if (this.cache.cap !== cap) { this.cache.cap = cap; $('caption').textContent = cap; $('caption').hidden = !cap; }
     // one camera chip: back to the whole park, or back to following the crew
     { const r = g.renderer, working = sim.workers.some((w) => w.job), zoomed = r.cam.s > r.home.s * 1.12; let mode = '';
       if (sim.mode === 'day' || sim.mode === 'gameday') { if (r.userMoved || r.follow) mode = 'park'; else if (sim.mode === 'day' && r.director && zoomed) mode = 'wide'; else if (sim.mode === 'day' && !r.director && working) mode = 'follow'; }
@@ -131,6 +170,7 @@ export class UI {
       if (sim.tutorial === 0) { prompt = 'Tap the outfield to get it mowed.'; hint = 'outfield'; }
       else if (sim.tutorial === 2) { const f = sim.freeWorker(); if (f) { prompt = `${f.name} is free. The infield dirt could use a drag.`; hint = 'skin'; } }
       else if (sim.tutorial === 3 && sim.doneToday >= 2 && !Object.keys(sim.jobs).length) prompt = 'Open the gates whenever the park looks right.';
+      else if (sim.tutorial >= 4 && sim.designsOpen() && !sim.designsMowed && !sim.jobs['mow:outfield'] && sim.freeWorker()) { prompt = 'New: draw something for the blimp. Tap the outfield.'; hint = 'outfield'; }
     } else if (paused && sim.mode === 'day' && !this.kind) prompt = 'Paused. The grass will wait.';
     if (this.promptKey !== prompt) { this.promptKey = prompt; const p = $('prompt'); p.textContent = prompt; p.hidden = !prompt; }
     g.renderer.hint = this.kind ? null : hint;
@@ -142,7 +182,7 @@ export class UI {
     if (sim.mode === 'summary') { const s = sim.summary, row = (r) => `<div><span>${esc(r.label)}</span><b>${gem}${r.v}</b></div>`, ord = (n) => n + (['th', 'st', 'nd', 'rd'][(n % 100 > 10 && n % 100 < 14) ? 0 : n % 10 < 4 ? n % 10 : 0] || 'th');
       const table = s.table.map((t, i) => `<div class="${t.us ? 'us' : ''}"><span>${i + 1}</span><span>${esc(t.name)}</span><span>${t.w}–${t.l}</span></div>`).join('');
       const nx = s.next, nextLine = s.seasonOver ? `Next: Season ${s.season + 1} opens against the ${esc(nx.opp.name)}.` : `Tomorrow: the ${esc(nx.opp.name)}${nx.event ? ` · ${esc(nx.text)}` : '.'}`;
-      sum.innerHTML = `<small>SEASON ${s.season} · GAME ${s.game} OF ${SEASON_GAMES}</small><h2>${s.win ? 'Clovers win' : `${esc(s.opp.short)} win`}</h2><p class="score">Clovers ${s.home}, ${esc(s.opp.short)} ${s.away} · ${s.record.w}–${s.record.l}, ${ord(s.place)} of 6</p>${s.seasonOver ? `<p class="pennant">${s.pennant ? 'Pennant! A banner goes up on the wall.' : `Season over: ${ord(s.place)} place.`}</p><div class="table">${table}</div>` : ''}<div class="ledger">${s.rows.map(row).join('')}<div class="total"><span>Today</span><b>${gem}${s.total}</b></div></div><p class="next">${nextLine}</p><button class="enamel" id="next-day" type="button">Next morning</button>`;
+      sum.innerHTML = `<small>SEASON ${s.season} · GAME ${s.game} OF ${SEASON_GAMES}</small><h2>${s.win ? 'Clovers win' : `${esc(s.opp.short)} win`}</h2><p class="score">Clovers ${s.home}, ${esc(s.opp.short)} ${s.away} · ${s.record.w}–${s.record.l}, ${ord(s.place)} of 6</p>${s.seasonOver ? `<p class="pennant">${s.pennant ? 'Pennant! A banner goes up on the wall.' : `Season over: ${ord(s.place)} place.`}</p><div class="table">${table}</div>` : ''}<div class="ledger">${s.rows.map(row).join('')}<div class="total"><span>Today</span><b>${gem}${s.total}</b></div></div><p class="next">${nextLine}</p><div class="actions"><button class="enamel enamel--quiet" id="postcard" type="button">Postcard</button><button class="enamel" id="next-day" type="button">Next morning</button></div>`;
       sum.hidden = false; requestAnimationFrame(() => { sum.dataset.ready = '1'; });
     } else { sum.hidden = true; delete sum.dataset.ready; }
     this.game.reframe();

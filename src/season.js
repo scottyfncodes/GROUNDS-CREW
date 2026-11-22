@@ -10,13 +10,13 @@ export const seasonOf = (day) => ({ n: Math.floor((day - 1) / SEASON_GAMES) + 1,
 
 /** Tonight's opponent and card. Day 1 has no card: the first evening is about learning the park. */
 const mix = (a, b) => { let h = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(b + 0x632be5ab, 0xc2b2ae35); h ^= h >>> 15; h = Math.imul(h, 0x2c1b3c6d); h ^= h >>> 12; return h >>> 0; };
-const ORDER = ['pattern', 'kids', 'rain', 'scout', 'pattern', 'rivalry'];
+const ORDER = ['pattern', 'art', 'kids', 'rain', 'scout', 'art', 'rivalry'];
 const memo = new Map();
 /** The card for a day: fireworks at midseason and the finale, a pattern request on day 2, otherwise a seeded pick that never repeats the night before. */
 function eventOf(seed, day) {
   if (day <= 1) return null; const key = seed + ':' + day; if (memo.has(key)) return memo.get(key);
   const { game } = seasonOf(day); let e;
-  if (day === 2) e = 'pattern'; else if (game === 6 || game === SEASON_GAMES) e = 'fireworks';
+  if (day === 2) e = 'art'; else if (day === 3) e = 'pattern'; else if (game === 6 || game === SEASON_GAMES) e = 'fireworks';
   else { e = ORDER[mix(seed, day * 3 + 1) % ORDER.length]; const prev = day > 2 ? eventOf(seed, day - 1) : null; if (e === prev) e = ORDER[(ORDER.indexOf(e) + 1 + (mix(seed, day) % (ORDER.length - 1))) % ORDER.length]; if (e === prev) e = 'kids'; }
   memo.set(key, e); return e;
 }
@@ -30,6 +30,7 @@ export function tonight(seed, day) {
 export function cardText(opp, event, pattern) {
   const pn = pattern && PATTERNS.find((p) => p.id === pattern).name;
   switch (event) {
+    case 'art': return `The blimp is up tonight for the ${opp.short} game. Draw something in the outfield.`;
     case 'pattern': return `The ${opp.short}' manager wants ${pn} in the outfield.`;
     case 'scout': return 'A big-league scout is in the stands. A perfect field doubles the craft bonus.';
     case 'rain': return 'Rain overnight soaked the infield. Drag it dry before the gates open.';
@@ -43,6 +44,7 @@ export function cardText(opp, event, pattern) {
 /** Whether the field meets tonight's card, given the field condition and how the outfield was last mown today. */
 export function cardMet(card, cond, patternDone) {
   switch (card.event) {
+    case 'art': return patternDone.outfield === 'design' && cond.areas.outfield >= 0.97;
     case 'pattern': return patternDone.outfield === card.pattern && cond.areas.outfield >= 0.97;
     case 'rain': return cond.areas.skin >= 0.97;
     case 'kids': return cond.lines >= 0.97;

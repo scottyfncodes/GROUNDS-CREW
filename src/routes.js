@@ -52,13 +52,33 @@ function link(segs) {
   return out;
 }
 
-export function mowRoute(areaKey, pattern, W, from = NAV.gateIn) {
+/** The design pass: back down each lane that crosses the design, blades down only over the painted spans. */
+function designPass(inArea, mask, W, from) {
+  const lanes = [];
+  for (let k = -30; k <= 30; k++) { const spans = []; let start = null;
+    for (let v = -100; v <= 470; v += 2) { let hit = false; for (const o of [-0.4, -0.15, 0.15, 0.4]) { const x = (k + 0.5 + o) * W; if (inArea(x, v) && mask(x, v)) { hit = true; break; } }
+      if (hit && start === null) start = v; else if (!hit && start !== null) { spans.push([start - 2, v]); start = null; } }
+    if (spans.length) lanes.push({ k, spans }); }
+  const segs = []; let up = false, pos = from;
+  if (lanes.length && Math.abs(lanes[0].k * W - pos[0]) > Math.abs(lanes[lanes.length - 1].k * W - pos[0])) lanes.reverse();
+  for (const lane of lanes) { const x = (lane.k + 0.5) * W, spans = up ? lane.spans : [...lane.spans].reverse();
+    spans.forEach((sp, n) => { const a = up ? sp[0] : sp[1], b = up ? sp[1] : sp[0]; segs.push({ a: [x, a], b: [x, b], work: true, k: lane.k, dir: [0, 1], W, pass: 3, endOfLane: n === spans.length - 1 }); });
+    up = !up; }
+  return segs;
+}
+
+export function mowRoute(areaKey, pattern, W, from = NAV.gateIn, design = null) {
   let segs = [], parityAt;
   const lane = (dir) => (x, y) => Math.floor((x * -dir[1] + y * dir[0]) / W) & 1;
   if (areaKey === 'foul') {
     const L = lanePass((x, y) => x < 0 && areaAt(x, y) === 'foul', [-S2, S2], W, 1, from);
     const R = lanePass((x, y) => x >= 0 && areaAt(x, y) === 'foul', [S2, S2], W, 1, L.length ? L[L.length - 1].b : from);
     segs = L.concat(R); const pl = lane([-S2, S2]), pr = lane([S2, S2]); parityAt = (x, y) => (x < 0 ? pl(x, y) : pr(x, y));
+  } else if (pattern === 'design' && design) {
+    // a solid ground for the design: every lane mown toward centre field (light), the mower driving back down with its blades up
+    const inArea = (x, y) => areaAt(x, y) === areaKey, base = lanePass(inArea, [0, 1], W, 4, from).map((sg) => (sg.b[1] < sg.a[1] ? { ...sg, a: sg.b, b: sg.a } : sg));
+    segs = base.concat(designPass(inArea, design, W, base.length ? base[base.length - 1].b : from)); parityAt = (x, y) => (design(x, y) ? 0 : 1);
+    const linked = link(segs).map((sg) => (sg.work ? sg : { ...sg, fast: true })); return { segs: linked, parityAt };
   } else if (pattern === 'arcs') {
     segs = arcPass((x, y) => areaAt(x, y) === areaKey, W, from); parityAt = (x, y) => Math.floor(Math.hypot(x, y) / W) & 1;
   } else {
@@ -99,7 +119,8 @@ export function chalkRoute() {
 export const routeLength = (segs) => segs.reduce((n, s) => n + dist(s.a, s.b), 0);
 
 /** Which shade a mowing pattern gives a point: used for the preview before a job is assigned. */
-export function patternParity(areaKey, pattern, W) {
+export function patternParity(areaKey, pattern, W, design = null) {
+  if (pattern === 'design' && design) return (x, y) => (design(x, y) ? 0 : 1);
   const lane = (dir) => (x, y) => Math.floor((x * -dir[1] + y * dir[0]) / W) & 1;
   if (areaKey === 'foul') { const pl = lane([-S2, S2]), pr = lane([S2, S2]); return (x, y) => (x < 0 ? pl(x, y) : pr(x, y)); }
   if (pattern === 'arcs') return (x, y) => Math.floor(Math.hypot(x, y) / W) & 1;

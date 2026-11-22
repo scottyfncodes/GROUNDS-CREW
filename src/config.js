@@ -38,6 +38,7 @@ export const FEEL = {
   ZOOM_MAX: 4.5,
 };
 
+export const BLIMP = [0, 0, 15, 30];   // bucks for one, two and three stars
 export const PAY = { 'mow:outfield': 40, 'mow:infield': 15, 'mow:foul': 20, 'drag:skin': 25, 'rake:mound': 10, 'chalk:lines': 20, gate: 30, craft: 70 };
 
 export const UPGRADES = [
@@ -61,6 +62,7 @@ export const OPPONENTS = [
 ];
 /** The day's card: something about tonight that makes a choice matter. Bonuses are paid at the gate. */
 export const EVENTS = {
+  art: { name: 'Draw for the blimp', bonus: 40 },
   pattern: { name: 'Special request', bonus: 40 },
   scout: { name: 'Scout in the stands', bonus: 0 },
   rain: { name: 'Rain overnight', bonus: 30 },
@@ -75,6 +77,7 @@ export const PATTERNS = [
   { id: 'checker', name: 'Checkerboard' },
   { id: 'diamonds', name: 'Diamonds', needs: 'patterns' },
   { id: 'arcs', name: 'Fan Arcs', needs: 'patterns', only: 'outfield' },
+  { id: 'design', name: 'Your design', needs: 'designs', only: 'outfield' },
 ];
 export const REQUESTABLE = ['classic', 'diagonal', 'checker'];
 

@@ -24,6 +24,8 @@ npm test           # headless simulation tests (node --test)
 | `src/routes.js` | Route planning: mower passes for each pattern, drag arcs, rake and chalk paths |
 | `src/sim.js` | Fixed-step simulation: worker state machines, job and equipment ownership, economy, day loop, onboarding |
 | `src/gameday.js` | The evening: crew clears, fans walk in, dusk, towers, crowd, a few scripted plays, fireworks, the day summary |
+| `src/design.js` | Outfield designs: the 16 ft drawing grid, stamps, save packing |
+| `src/postcard.js` | The postcard of the night's field, shared or saved |
 | `src/season.js` | The 12-game season: tonight's opponent and card, whether the field meets it, the league table |
 | `src/render.js` | Oblique camera and the director that frames the work, scenery, decor, depth sort, particles, four lighting states |
 | `src/sprites.js` | Pixel people and machines drawn from the simulation state |
@@ -36,6 +38,14 @@ The art direction and the integration contract are in [`docs/art-bible.md`](docs
 
 Why no Phaser or bundler: the game is one canvas with a custom surface shader and about fifteen small modules.
 A framework would add a megabyte and a build step without drawing a single stripe better.
+
+## The hook: draw it, mow it, show it
+
+From day 2 you can draw your own design for the outfield (or start from a stamp: Clover, Heart, Star, Baseball,
+Big C). The crew mows the outfield one way for a solid ground, then mows your design back the other way so it
+lies dark, the way logos are mown into real outfields. On game night the Cloverfield blimp goes up and the
+broadcast shows your field with a star rating (three stars needs a design on a near-perfect field), and the
+summary gives you a postcard of the field from above to save or share.
 
 ## The season
 
