@@ -105,12 +105,12 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .about { margin-top: var(--s3); padding-top: var(--s3); border-top: 2px solid rgba(43, 58, 85, .18); font-size: var(--t-s); color: var(--muted); font-weight: 400; text-align: center; }
 
 /* day summary: the one centred board, after the game */
-.summary { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(calc(100% - 2 * var(--s4)), 360px); padding: var(--s4) var(--s4) var(--s4); text-align: center; animation: rise .2s ease-out; max-height: calc(100% - 2 * var(--s4)); overflow-y: auto; }
+.summary { position: fixed; left: 50%; bottom: calc(var(--sab) + var(--s3)); transform: translateX(-50%); width: min(calc(100% - 2 * var(--s3)), 400px); padding: var(--s3) var(--s4) var(--s4); text-align: center; animation: rise .2s ease-out; max-height: calc(100% - 2 * var(--s4)); overflow-y: auto; }
 .summary small { font-size: var(--t-xs); letter-spacing: .2em; color: var(--brick); }
-.summary h2 { font: 400 var(--t-xl)/1.05 var(--display); margin: var(--s1) 0 var(--s1); }
-.summary .score { font-size: var(--t-m); color: var(--muted); font-weight: 400; margin-bottom: var(--s3); }
-.ledger { border-top: 2px solid var(--navy); border-bottom: 2px solid var(--navy); margin: var(--s3) 0; }
-.ledger div { display: flex; justify-content: space-between; padding: var(--s2) 0; font-size: var(--t-m); font-variant-numeric: tabular-nums; } .ledger div + div { border-top: 1px solid rgba(43, 58, 85, .2); }
+.summary h2 { font: 400 var(--t-l)/1.05 var(--display); margin: 2px 0; }
+.summary .score { font-size: var(--t-s); color: var(--muted); font-weight: 400; }
+.ledger { border-top: 2px solid var(--navy); border-bottom: 2px solid var(--navy); margin: var(--s2) 0 var(--s3); }
+.ledger div { display: flex; justify-content: space-between; padding: 5px 0; font-size: var(--t-s); font-variant-numeric: tabular-nums; } .ledger div + div { border-top: 1px solid rgba(43, 58, 85, .2); }
 .ledger div span { font-weight: 400; } .ledger .total { font: 400 var(--t-l)/1 var(--display); border-top: 2px solid var(--navy); align-items: center; }
 .ledger b { display: inline-flex; align-items: center; gap: var(--s1); }
 .summary .enamel { width: 100%; }
@@ -124,6 +124,7 @@ body[data-mode="gameday"] #chip-field { pointer-events: none; }
 /* landscape phones: the sheet docks to the right so the field stays in view */
 @media (orientation: landscape) and (max-height: 520px) {
   .sheet { left: auto; right: calc(var(--sar) + var(--s3)); width: 320px; margin: 0; max-height: calc(100% - var(--bar-h) - 96px); }
+  .summary { left: auto; right: calc(var(--sar) + var(--s3)); transform: none; width: 320px; }
   .bar { justify-content: flex-end; } .title { flex-direction: row; align-items: flex-end; padding-bottom: calc(var(--sab) + var(--s3)); } .sign { align-self: flex-start; } .sign h1 { font-size: 34px; max-width: none; }
   .title-foot { width: auto; align-items: flex-end; } .title .note { font-size: var(--t-m); }
   .prompt { bottom: calc(var(--sab) + var(--s3)); left: calc(var(--sal) + var(--s3)); transform: none; max-width: 44%; }

@@ -18,7 +18,7 @@ function boot() {
   const canvas = document.getElementById('game');
   const surface = new Surface((w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; });
   const game = { settings: loadSettings(), speed: 1, paused: false, saveT: 0 };
-  const sim = game.sim = new Sim(surface, (type, data) => { game.renderer && game.renderer.on(type, data); game.sound.on(type, data); if (type === 'jobdone' || type === 'buy' || type === 'newday' || type === 'summary') game.saveSoon(); });
+  const sim = game.sim = new Sim(surface, (type, data) => { game.renderer && game.renderer.on(type, data); game.sound.on(type, data); game.director && game.director(type, data); if (type === 'jobdone' || type === 'buy' || type === 'newday' || type === 'summary') game.saveSoon(); });
   game.sound = new Sound(game.settings);
   const saved = loadSave(); let restored = false;
   if (saved.data) { try { sim.fromSave(saved.data); restored = true; } catch (err) { saved.error = err; clearSave(); } }
@@ -27,14 +27,18 @@ function boot() {
   const r = game.renderer = new Renderer(canvas, sim, surface);
   const ui = game.ui = new UI(game);
 
-  const insets = () => { const land = innerWidth > innerHeight, sat = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sat')) || 0;
-    if (sim.mode === 'title') return land ? { top: 30, bottom: 30 } : { top: Math.min(210, innerHeight * 0.3), bottom: Math.min(150, innerHeight * 0.2) };
+  const insets = () => { const land = innerWidth > innerHeight, sat = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sat')) || 0, rect = (sel) => { const el = document.querySelector(sel); return el && !el.hidden ? el.getBoundingClientRect() : null; };
+    if (sim.mode === 'title') { const sign = rect('.sign'), foot = rect('.title-foot'); if (!sign || !foot) return { top: 120, bottom: 120 };
+      if (land && innerHeight < 520) return { top: 64, bottom: 8 };                       // short landscape: sign and button sit beside the park
+      // portrait lets the back of the slab tuck under the note, as the chosen frame does; wide screens keep the park clear of both
+      return land ? { top: sign.bottom + 10, bottom: innerHeight - foot.top + 10 } : { top: sign.bottom - 4, bottom: Math.max(60, innerHeight - foot.top - 64) }; }
+    if (sim.mode === 'summary') { const b = rect('#summary'); if (b && !(land && innerHeight < 520)) return { top: 54 + sat, bottom: innerHeight - b.top + 10 }; }
     const cover = game.ui ? game.ui.cover() : 0; return { top: 54 + sat, bottom: cover ? cover + 8 : land && innerHeight < 520 ? 20 : 78 }; };
   const layout = () => { r.resize(); r.frame(insets()); };
   game.reframe = () => r.frame(insets());
   addEventListener('resize', layout); addEventListener('orientationchange', () => setTimeout(layout, 120)); if (window.visualViewport) visualViewport.addEventListener('resize', layout);
 
-  game.start = () => { if (sim.mode !== 'title') return; sim.start(); r.userMoved = false; r.frame(insets()); if (restored && sim.day > 1) ui.toast(`Welcome back. Day ${sim.day}.`); };
+  game.start = () => { if (sim.mode !== 'title') return; sim.start(); document.body.dataset.mode = 'day'; r.userMoved = false; r.frame(insets()); if (restored && sim.day > 1) ui.toast(`Welcome back. Day ${sim.day}.`); };
   game.setSpeed = (n) => { game.speed = n; game.paused = false; };
   game.cycleSpeed = () => { game.speed = game.speed === 1 ? 2 : game.speed === 2 ? 4 : 1; game.paused = false; };
   game.togglePause = () => { if (sim.mode === 'title' || sim.mode === 'summary') return; game.paused = !game.paused; };
@@ -61,6 +65,14 @@ function boot() {
   };
   bindInput(canvas, r, game.tap);
 
+  // The very first mowing job: bring the camera in to ride along, then ease back once the first full stripe is down.
+  let easeBack = 0;
+  game.director = (type, d) => {
+    if (type === 'workstart' && sim.tutorial === 1 && d.job.type === 'mow' && !r.userMoved && !r.follow) { r.follow = d.worker.id; r.auto = true; }
+    else if (type === 'stripe' && d.first && r.auto) easeBack = 2.6;
+  };
+  game.tickDirector = (dt) => { if (r.auto && !r.follow) r.auto = false; if (easeBack > 0 && (easeBack -= dt) <= 0 && r.auto) { r.auto = false; r.reset(); } };
+
   document.addEventListener('visibilitychange', () => { if (document.hidden) { game.save(); game.sound.suspend(true); } else { game.sound.suspend(false); last = performance.now(); } });
   addEventListener('pagehide', () => game.save());
 
@@ -71,7 +83,7 @@ function boot() {
     const dt = Math.min(0.1, Math.max(0, (now - last) / 1000)); last = now;
     const running = sim.mode !== 'title' && sim.mode !== 'summary' && !game.paused, simDt = running ? dt * game.speed : 0;
     acc += simDt; let n = Math.floor(acc / FEEL.SIM_DT); if (n > 14) { n = 14; acc = n * FEEL.SIM_DT; } acc -= n * FEEL.SIM_DT; stepSim(n);
-    r.draw(running ? acc / FEEL.SIM_DT : 1, dt, simDt); ui.update(dt); game.sound.update(sim, dt, !running);
+    game.tickDirector(dt); r.draw(running ? acc / FEEL.SIM_DT : 1, dt, simDt); ui.update(dt); game.sound.update(sim, dt, !running);
     if (sim.mode !== 'title' && (game.saveT += dt) > 20) game.save();
     requestAnimationFrame(frame);
   }
@@ -79,8 +91,8 @@ function boot() {
   // ---- state for tests, captures and PLAYCRAFT ---------------------------------------------------------------
   const test = {
     assign: (who, type, pattern) => { const key = Object.keys(JOBS).find((k) => k === type || k.startsWith(type + ':')); return sim.assign(who, key, pattern).ok; },
-    advance: (secs) => stepSim(Math.round(secs / FEEL.SIM_DT)),
-    advanceTo: (what) => { for (let i = 0; i < 9000; i++) { const j = sim.jobs['mow:outfield'], seg = j && j.segs[j.si]; if (what === 'before-first-stripe' && seg && j.worker.state === ST.WORKING && seg.work && dist(seg.a, seg.b) >= 140 && dist(seg.a, seg.b) - j.sd < 70) break; sim.step(FEEL.SIM_DT); } },
+    advance: (secs) => { stepSim(Math.round(secs / FEEL.SIM_DT)); r.clearFx(); },
+    advanceTo: (what) => { for (let i = 0; i < 9000; i++) { const j = sim.jobs['mow:outfield'], seg = j && j.segs[j.si]; if (what === 'before-first-stripe' && seg && j.worker.state === ST.WORKING && seg.work && dist(seg.a, seg.b) >= 140 && dist(seg.a, seg.b) - j.sd < 70) break; sim.step(FEEL.SIM_DT); } r.clearFx(); r.snap(); },
     finishAll: () => { sim.workers.forEach((w) => { if (w.job) sim.cancel(w.id); }); surface.finishAll(); sim.refresh(); },
     skipGame: () => game.skipGame(), give: (n) => { sim.bucks += n; }, game,
   };

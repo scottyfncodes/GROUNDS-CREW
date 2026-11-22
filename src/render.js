@@ -14,7 +14,7 @@ const LIGHTS = ['morning', 'afternoon', 'golden', 'night'];
 const SHADOW = { morning: [-0.75, 0.42, 0.2], afternoon: [0.16, 0.26, 0.26], golden: [1.15, -0.2, 0.3], night: [0.05, 0.16, 0.2] };
 const FAN_COLORS = [PAL.vintageCream, PAL.brickRed, PAL.fadedNavy, PAL.sunFadedOrange, PAL.skyBlue, PAL.brassYellow, '#ffffff', PAL.tree];
 const TOWERS = [[-258, 262], [258, 262], linePt(-1, 58, 128), linePt(1, 58, 128)];
-const BOARD = { x: -56, w: 112, y: 440, z: 26, h: 44 };
+const BOARD = { x: -62, w: 124, y: 440, z: 26, h: 48 };
 
 export class Renderer {
   constructor(canvas, sim, surface) {
@@ -40,6 +40,9 @@ export class Renderer {
     if (!this.userMoved) { this.to = { ...this.home }; if (!this._framed) { this.cam = { ...this.home }; this._framed = true; } }
   }
   reset() { this.userMoved = false; this.follow = null; this.to = { ...this.home }; }
+  clearFx() { this.parts.length = this.sparks.length = this.sheens.length = this.floats.length = 0; this.routeFx = null; }
+  /** Jump the camera to where it is heading (used after time is skipped). */
+  snap() { if (this.follow) { const w = this.sim.worker(this.follow); if (w) { this.to.x = w.x; this.to.y = w.y + 14; this.to.s = Math.max(this.to.s, this.home.s * 1.9); } } this.cam = { ...this.to }; }
   panBy(dx, dy) { this.follow = null; this.userMoved = true; this.to.x = clamp(this.to.x - dx / this.cam.s, -270, 270); this.to.y = clamp(this.to.y + dy / (this.cam.s * K), -110, 450); this.cam.x = this.to.x; this.cam.y = this.to.y; }
   zoomAt(sx, sy, factor) {
     const before = this.toWorld(sx, sy); this.userMoved = true; const s = clamp(this.cam.s * factor, this.minS, FEEL.ZOOM_MAX); this.cam.s = this.to.s = s;
@@ -82,7 +85,7 @@ export class Renderer {
     U.push({ kind: 'dugout', side: -1, y: linePt(-1, 44, 61)[1] }, { kind: 'dugout', side: 1, y: linePt(1, 44, 61)[1] });
     U.push({ kind: 'shed', x: SHED.x, y: SHED.y }, { kind: 'stand', x: 152, y: -74 }, { kind: 'entrance', x: 0, y: -133 }, { kind: 'cart', x: -252, y: 132 });
     this.canopies = {}; this.birds = [{ at: 0, x: 0, y: 0, z: 0, t: 3, state: 'perch', from: null, flip: false }, { at: 3, x: 0, y: 0, z: 0, t: 9, state: 'perch', from: null, flip: true }];
-    this.perches = [[-30, BOARD.y, BOARD.z + BOARD.h], [38, BOARD.y, BOARD.z + BOARD.h], [-120, fenceR(-0.33) * Math.cos(0.33), WALL_H], [SHED.x + 20, SHED.y + 8, SHED.h + 5], [150, fenceR(0.4) * Math.cos(0.4), WALL_H], [-60, 190, 0], [40, 96, 0], [TOWERS[1][0], TOWERS[1][1], 86]];
+    this.perches = [[-30, BOARD.y, BOARD.z + BOARD.h + 9], [38, BOARD.y, BOARD.z + BOARD.h + 9], [-120, fenceR(-0.33) * Math.cos(0.33), WALL_H], [SHED.x + 20, SHED.y + 8, SHED.h + 5], [150, fenceR(0.4) * Math.cos(0.4), WALL_H], [-60, 190, 0], [40, 96, 0], [TOWERS[1][0], TOWERS[1][1], 86]];
     this.perches[2][0] = Math.sin(-0.33) * fenceR(0.33); this.perches[4][0] = Math.sin(0.4) * fenceR(0.4);
     this.birds.forEach((b) => { const p = this.perches[b.at]; b.x = p[0]; b.y = p[1]; b.z = p[2]; });
     this.clouds = [0, 1, 2].map((i) => ({ x: -400 + i * 330, y: 60 + i * 130, r: 120 + i * 30, v: 5 + i * 1.6 }));
@@ -241,10 +244,10 @@ export class Renderer {
       case 'board': { const gd = sim.gameday, on = gd && gd.board.on, bx = X(BOARD.x), by = Y(BOARD.y, BOARD.z + BOARD.h), bw = BOARD.w * s, bh = BOARD.h * s;
         g.fillStyle = PAL.warmCharcoal; g.fillRect(X(BOARD.x + 14), Y(BOARD.y, BOARD.z), 5 * s, BOARD.z * s); g.fillRect(X(BOARD.x + BOARD.w - 19), Y(BOARD.y, BOARD.z), 5 * s, BOARD.z * s);
         g.fillStyle = '#1d3a2e'; g.fillRect(bx, by, bw, bh); g.strokeStyle = PAL.vintageCream; g.lineWidth = Math.max(1, 1.4 * s); g.strokeRect(bx + 1.5 * s, by + 1.5 * s, bw - 3 * s, bh - 3 * s);
-        g.fillStyle = PAL.fadedNavy; g.fillRect(bx, by - 9 * s, bw, 9 * s); g.fillStyle = PAL.vintageCream; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `${Math.max(5, 6.4 * s)}px "Alfa Slab One", serif`; g.fillText('CLOVERFIELD PARK', bx + bw / 2, by - 4.3 * s);
-        const lit = on ? '#ffd98a' : 'rgba(241,230,207,.78)'; g.fillStyle = lit; g.font = `600 ${Math.max(6, 11 * s)}px "Barlow Condensed", sans-serif`;
-        const hs = gd ? gd.board.home : 0, as = gd ? gd.board.away : 0; g.textAlign = 'left'; g.fillText('HOME', bx + 8 * s, by + 14 * s); g.fillText('AWAY', bx + 8 * s, by + 31 * s); g.textAlign = 'right'; g.fillText(String(hs), bx + bw - 9 * s, by + 14 * s); g.fillText(String(as), bx + bw - 9 * s, by + 31 * s);
-        g.fillStyle = on ? '#ffd98a' : 'rgba(241,230,207,.3)'; for (let i = 0; i < 9; i++) g.fillRect(bx + (46 + i * 5.2) * s, by + (12.6 + (i % 2 ? 17 : 0)) * s, 2.4 * s, 2.4 * s); break; }
+        g.fillStyle = PAL.fadedNavy; g.fillRect(bx, by - 9 * s, bw, 9 * s); g.fillStyle = PAL.vintageCream; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `${Math.max(5, 7 * s)}px "Alfa Slab One", serif`; g.fillText('CLOVERFIELD PARK', bx + bw / 2, by - 4.3 * s);
+        g.fillStyle = on ? '#ffd98a' : 'rgba(241,230,207,.82)'; g.font = `600 ${Math.max(8, 17 * s)}px "Barlow Condensed", sans-serif`;
+        const hs = gd ? gd.board.home : 0, as = gd ? gd.board.away : 0; g.textAlign = 'left'; g.fillText('HOME', bx + 9 * s, by + 14.5 * s); g.fillText('AWAY', bx + 9 * s, by + 34 * s); g.textAlign = 'right'; g.fillText(String(hs), bx + bw - 10 * s, by + 14.5 * s); g.fillText(String(as), bx + bw - 10 * s, by + 34 * s);
+        g.fillStyle = 'rgba(241,230,207,.35)'; g.fillRect(bx + 8 * s, by + 23.6 * s, bw - 16 * s, Math.max(1, 0.8 * s)); break; }
       case 'flag': { const x = X(o.x), top = Y(o.y, 56); g.fillStyle = PAL.warmCharcoal; g.fillRect(x - 0.6 * s, top, 1.2 * s, 56 * s); for (let i = 0; i < 5; i++) { const wv = this.reduced ? 0 : Math.sin(t * 3.4 - i * 0.9) * (0.5 + i * 0.35) * s; g.fillStyle = i < 2 ? PAL.brickRed : i < 4 ? PAL.vintageCream : PAL.brickRed; g.fillRect(x + (0.6 + i * 3.4) * s, top + wv + i * 0.3 * s, 3.5 * s, 9 * s - i * 0.6 * s); } break; }
       case 'tower': { const x = X(o.x), on = this.lamps >= (o.i + 1) / 4 - 0.01; g.fillStyle = PAL.warmCharcoal; g.fillRect(x - s, Y(o.y, 78), 2 * s, 78 * s); g.fillRect(x - 3 * s, Y(o.y, 3), 6 * s, 3 * s);
         g.fillStyle = PAL.warmCharcoal; g.fillRect(x - 9 * s, Y(o.y, 88), 18 * s, 10 * s); g.fillStyle = on ? '#fff3c4' : '#c9c2b0'; for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) g.fillRect(x - 7.6 * s + i * 4 * s, Y(o.y, 86.6) + j * 4.2 * s, 3 * s, 3 * s); break; }

@@ -112,7 +112,7 @@ export class UI {
     this.set('speed', `${g.speed}×`); const paused = g.paused; if (this.cache.paused !== paused) { this.cache.paused = paused; $('pause').setAttribute('aria-pressed', String(paused)); $('pause').setAttribute('aria-label', paused ? 'Resume' : 'Pause'); }
     if (this.toastT > 0 && (this.toastT -= dt) <= 0) $('toast').hidden = true;
     const gd = sim.gameday, cap = sim.mode === 'gameday' && gd ? gd.caption : ''; if (this.cache.cap !== cap) { this.cache.cap = cap; $('caption').textContent = cap; $('caption').hidden = !cap; }
-    $('recenter').hidden = !(g.renderer.userMoved && sim.mode !== 'title' && !cap && this.toastT <= 0);
+    $('recenter').hidden = !((g.renderer.userMoved || g.renderer.follow) && sim.mode !== 'title' && !cap && this.toastT <= 0);
     // onboarding prompts: one line, tied to what is on the field
     let prompt = '', hint = null;
     if (sim.mode === 'day' && !this.kind && !paused) {
@@ -131,5 +131,6 @@ export class UI {
       sum.innerHTML = `<small>FINAL · DAY ${s.day}</small><h2>${s.win ? 'Clovers win' : 'Tough one tonight'}</h2><p class="score">Clovers ${s.home}, Visitors ${s.away} · Season ${s.record.w}–${s.record.l}</p><div class="ledger">${row('Jobs done today', s.jobs)}${row('Gate', s.gate)}${row(`Craftsmanship · field ${Math.round(s.field * 100)}%`, s.craft)}<div class="total"><span>Today</span><b>${gem}${s.total}</b></div></div><button class="enamel" id="next-day" type="button">Next morning</button>`;
       sum.hidden = false; requestAnimationFrame(() => { sum.dataset.ready = '1'; });
     } else { sum.hidden = true; delete sum.dataset.ready; }
+    this.game.reframe();
   }
 }
